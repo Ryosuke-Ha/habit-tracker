@@ -1,129 +1,158 @@
-# 習慣トラッカー MVP
+# Habit Tracker
 
-Atomic Habitsの「実施意図」に基づいた習慣管理Webアプリ。
+A habit management web app based on the "implementation intentions" concept from Atomic Habits.
 
-## 構成
+## Stack
 
 - **Frontend**: Next.js 14 (TypeScript, App Router, Tailwind CSS) — port 3000
 - **Backend**: FastAPI (Python 3.12, SQLite) — port 8000
 
 ---
 
-## セットアップ & 起動手順
+## Setup & Running
 
-### 1. バックエンド
+### 1. Backend
 
 ```bash
 cd backend
 
-# 仮想環境を作成（初回のみ）
+# Create virtual environment (first time only)
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 依存パッケージをインストール（初回のみ）
+# Install dependencies (first time only)
 pip install -r requirements.txt
 
-# サーバー起動
+# Copy and configure environment variables
+cp .env.example .env
+```
+
+Edit `backend/.env`:
+
+| Variable | Description | Default (dev) |
+|----------|-------------|---------------|
+| `DATABASE_URL` | DB connection URL. PostgreSQL (production) or SQLite path (development) | `sqlite:///./habit_tracker.db` |
+| `FRONTEND_URL` | Frontend URL (CORS allowlist) | `http://localhost:3000` |
+
+```bash
+# Start server
 uvicorn main:app --reload
 ```
 
-起動すると自動的にSQLiteのDBが作成され、初期データ（平日・休日テンプレート）が投入されます。
+The SQLite database is created automatically on first run, along with seed data (weekday/weekend templates).
 
-API ドキュメント: http://localhost:8000/docs
+API docs: http://localhost:8000/docs
 
 ---
 
-### 2. フロントエンド（環境変数の設定）
+### 2. Frontend
 
 ```bash
 cd frontend
 
-# .env.local を作成して認証情報を設定
+# Copy and configure environment variables
 cp .env.example .env.local
 ```
 
-`.env.local` を編集して以下を設定:
+Edit `frontend/.env.local`:
 
-| 変数名 | 取得方法 |
-|--------|---------|
-| `GOOGLE_CLIENT_ID` | [Google Cloud Console](https://console.cloud.google.com/) でOAuth 2.0クライアントIDを作成 |
-| `GOOGLE_CLIENT_SECRET` | 同上 |
-| `NEXTAUTH_SECRET` | 下記コマンドで生成 |
-| `NEXTAUTH_URL` | `http://localhost:3000`（デフォルト値のまま） |
+| Variable | How to obtain |
+|----------|--------------|
+| `GOOGLE_CLIENT_ID` | Create an OAuth 2.0 client ID in [Google Cloud Console](https://console.cloud.google.com/) |
+| `GOOGLE_CLIENT_SECRET` | Same as above |
+| `NEXTAUTH_SECRET` | Generate with the command below |
+| `NEXTAUTH_URL` | `http://localhost:3000` (dev) / your production URL |
+| `NEXT_PUBLIC_BACKEND_URL` | FastAPI URL (dev: `http://localhost:8000`) |
 
-**NEXTAUTH_SECRET の生成:**
+**Generate NEXTAUTH_SECRET:**
 ```bash
 openssl rand -base64 32
 ```
-生成された文字列を `NEXTAUTH_SECRET=` に設定してください。
+Paste the output as the value of `NEXTAUTH_SECRET`.
 
-**Google OAuth 設定:**
-- 承認済みリダイレクトURI: `http://localhost:3000/api/auth/callback/google`
-
----
-
-### 3. フロントエンド起動
-
-別ターミナルで:
+**Google OAuth configuration:**
+- Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
 
 ```bash
-cd frontend
-
-# 依存パッケージをインストール（初回のみ）
+# Install dependencies (first time only)
 npm install
 
-# 開発サーバー起動
+# Start dev server
 npm run dev
 ```
 
-ブラウザで http://localhost:3000 を開く。
+Open http://localhost:3000 in your browser.
 
 ---
 
-## 使い方
+## Features
 
-1. トップ画面で「平日」or「休日」を選択
-2. 習慣一覧が表示される
-3. 丸ボタンをクリックしてチェック/アンチェック（即時保存）
-4. 下部フォームから新しい習慣を追加（何を・いつ・どこで）
-5. ゴミ箱アイコンから習慣を削除
-
----
-
-## API エンドポイント
-
-| Method | Path | 説明 |
-|--------|------|------|
-| GET | /templates | テンプレート一覧 |
-| GET | /templates/{id}/habits | テンプレートの習慣一覧 |
-| POST | /habits | 習慣追加 |
-| DELETE | /habits/{id} | 習慣削除 |
-| GET | /logs/today?template_id={id} | 今日のチェック状態 |
-| POST | /logs/{habit_id}/toggle | チェック切り替え |
+- **Daily TODO list** — unified view of habit todos and carry-over todos, sorted by scheduled time
+- **Habit templates** — separate templates for weekdays and weekends
+- **Carry-over todos** — persistent todos that carry over across days
+- **Subtasks** — accordion subtask list with progress bar for any todo
+- **Weekly KPT review** — Keep / Problem / Try retrospective per week
+- **Monthly review** — achievement stats with charts and next-month goal setting
 
 ---
 
-## ディレクトリ構成
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/templates` | List templates |
+| GET | `/templates/{id}/habits` | List habits for a template |
+| POST | `/habits` | Add a habit |
+| PUT | `/habits/{id}` | Edit a habit |
+| DELETE | `/habits/{id}` | Delete a habit |
+| GET | `/logs/today?template_id={id}` | Today's check state |
+| POST | `/logs/{habit_id}/toggle` | Toggle check |
+| GET | `/persistent-todos` | List carry-over todos |
+| POST | `/persistent-todos` | Create carry-over todo |
+| PUT | `/persistent-todos/{id}` | Edit carry-over todo |
+| POST | `/persistent-todos/{id}/complete` | Toggle completion |
+| DELETE | `/persistent-todos/{id}` | Delete carry-over todo |
+| GET | `/subtasks?todo_type=&todo_id=` | List subtasks |
+| POST | `/subtasks` | Add subtask |
+| POST | `/subtasks/{id}/toggle` | Toggle subtask |
+| DELETE | `/subtasks/{id}` | Delete subtask |
+| GET | `/reviews/weekly/current` | Get/create current week's review |
+| POST | `/reviews/weekly/{id}/kpt` | Add KPT item |
+| PUT | `/reviews/kpt/{id}` | Edit KPT item |
+| DELETE | `/reviews/kpt/{id}` | Delete KPT item |
+| GET | `/reviews/monthly/current` | Get/create current month's review |
+| GET | `/reviews/monthly/{year_month}/stats` | Monthly achievement stats |
+| PUT | `/reviews/monthly/{id}` | Update next-month goal |
+
+---
+
+## Directory Structure
 
 ```
 habit-tracker/
 ├── frontend/
 │   ├── app/
-│   │   ├── page.tsx               # テンプレート選択画面
-│   │   ├── habits/page.tsx        # 習慣一覧画面
-│   │   └── layout.tsx
+│   │   ├── page.tsx                  # Daily TODO screen
+│   │   ├── templates/page.tsx        # Template management
+│   │   ├── review/weekly/page.tsx    # Weekly KPT review
+│   │   └── review/monthly/page.tsx  # Monthly review
 │   └── components/
-│       ├── TemplateSelector.tsx   # 平日・休日選択
-│       ├── HabitList.tsx          # 習慣一覧
-│       ├── HabitItem.tsx          # 習慣1件
-│       └── AddHabitForm.tsx       # 習慣追加フォーム
+│       ├── TodoItem.tsx              # Unified todo card (habits + carry-over)
+│       ├── HabitList.tsx             # Sorted unified todo list
+│       ├── TemplateSelector.tsx      # Weekday/weekend selector
+│       ├── LoadingOverlay.tsx        # Initial loading animation
+│       └── HamburgerMenu.tsx         # Navigation menu
 ├── backend/
-│   ├── main.py                    # FastAPIアプリ + seed
-│   ├── models.py                  # SQLAlchemyモデル
-│   ├── database.py                # DB接続設定
+│   ├── main.py                       # FastAPI app + CORS + seed data
+│   ├── models.py                     # SQLAlchemy models
+│   ├── database.py                   # DB connection (env-var driven)
 │   ├── requirements.txt
 │   └── routers/
-│       ├── templates.py           # /templates エンドポイント
-│       └── habits.py              # /habits, /logs エンドポイント
+│       ├── templates.py
+│       ├── habits.py
+│       ├── reviews.py
+│       ├── monthly_reviews.py
+│       ├── persistent_todos.py
+│       └── subtasks.py
 └── README.md
 ```
