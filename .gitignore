@@ -1,0 +1,25 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.pyc
+backend/venv/
+
+# Next.js
+frontend/.next/
+frontend/node_modules/
+
+# SQLite
+*.db
+*.sqlite
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
+
+

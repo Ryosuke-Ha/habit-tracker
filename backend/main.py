@@ -1,0 +1,55 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+import models
+from database import SessionLocal, engine
+from routers import habits, monthly_reviews, persistent_todos, reviews, subtasks, templates
+
+models.Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="Habit Tracker API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(templates.router)
+app.include_router(habits.router)
+app.include_router(reviews.router)
+app.include_router(monthly_reviews.router)
+app.include_router(persistent_todos.router)
+app.include_router(subtasks.router)
+
+
+def seed_data():
+    db = SessionLocal()
+    try:
+        if db.query(models.Template).count() > 0:
+            return
+
+        weekday = models.Template(name="平日")
+        weekend = models.Template(name="休日")
+        db.add(weekday)
+        db.add(weekend)
+        db.flush()
+
+        weekday_habits = [
+            models.Habit(template_id=weekday.id, title="筋トレ", scheduled_time="07:00", location="ジム", order=0),
+            models.Habit(template_id=weekday.id, title="英語学習", scheduled_time="12:00", location="カフェ", order=1),
+            models.Habit(template_id=weekday.id, title="読書30分", scheduled_time="22:00", location="寝室", order=2),
+        ]
+        weekend_habits = [
+            models.Habit(template_id=weekend.id, title="長時間読書", scheduled_time="09:00", location="自宅", order=0),
+            models.Habit(template_id=weekend.id, title="投資リサーチ", scheduled_time="10:00", location="自宅", order=1),
+        ]
+        db.add_all(weekday_habits + weekend_habits)
+        db.commit()
+    finally:
+        db.close()
+
+
+seed_data()
