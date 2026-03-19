@@ -1,4 +1,4 @@
-import type { NextAuthOptions } from "next-auth";
+import type { NextAuthOptions, Profile } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
 export const authOptions: NextAuthOptions = {
@@ -17,10 +17,10 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   callbacks: {
-    async jwt({ token, account, profile }) {
+    async jwt({ token, account, profile }: { token: any; account: any; profile?: Profile & { sub?: string } }) {
       // 初回ログイン時にGoogle profileをトークンに保存
       if (account && profile) {
-        token.googleId = profile.sub ?? profile.id;
+        token.googleId = profile.sub;
       }
       return token;
     },

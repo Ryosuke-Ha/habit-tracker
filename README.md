@@ -5,7 +5,7 @@ A habit management web app based on the "implementation intentions" concept from
 ## Stack
 
 - **Frontend**: Next.js 14 (TypeScript, App Router, Tailwind CSS) — port 3000
-- **Backend**: FastAPI (Python 3.12, SQLite) — port 8000
+- **Backend**: FastAPI (Python 3.12, SQLite / PostgreSQL) — port 8000
 
 ---
 
@@ -35,6 +35,9 @@ Edit `backend/.env`:
 | `FRONTEND_URL` | Frontend URL (CORS allowlist) | `http://localhost:3000` |
 
 ```bash
+# Run database migrations
+alembic upgrade head
+
 # Start server
 uvicorn main:app --reload
 ```
@@ -82,6 +85,33 @@ npm run dev
 ```
 
 Open http://localhost:3000 in your browser.
+
+---
+
+## Database Migrations (Alembic)
+
+```bash
+cd backend
+source venv/bin/activate
+
+# Apply all pending migrations
+alembic upgrade head
+
+# Roll back one migration
+alembic downgrade -1
+
+# Create a new migration after changing models.py
+alembic revision --autogenerate -m "description"
+
+# Show current migration state
+alembic current
+```
+
+**Switching to PostgreSQL (Supabase):**
+1. Create a project on [Supabase](https://supabase.com/)
+2. Copy the **Transaction pooler** URI from Project Settings → Database → Connection string
+3. Set `DATABASE_URL=<uri>` in `backend/.env`
+4. Run `alembic upgrade head` to create all tables
 
 ---
 
