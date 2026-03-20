@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
-const API = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface KPTItem {
   id: number;
