@@ -29,6 +29,11 @@ app.include_router(persistent_todos.router)
 app.include_router(subtasks.router)
 
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+
 def seed_data():
     db = SessionLocal()
     try:
