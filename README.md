@@ -88,6 +88,75 @@ Open http://localhost:3000 in your browser.
 
 ---
 
+## Slack Auto-Fix Bot
+
+A Claude-powered bot that receives instructions in a Slack channel, modifies the codebase via GitHub, creates a PR, waits for CI, and auto-merges.
+
+### Setup
+
+#### 1. Slack App configuration
+
+1. Create a new Slack App at https://api.slack.com/apps
+2. Enable **Socket Mode** and generate an App-Level Token (`xapp-...`) with `connections:write` scope
+3. Enable **Event Subscriptions** → Subscribe to bot events: `message.channels`
+4. Add Bot Token Scopes: `channels:history`, `chat:write`
+5. Install the app to your workspace and invite it to `#habit-tracker-bot`
+
+#### 2. Environment variables
+
+```bash
+cd slack-bot
+cp .env.example .env
+```
+
+Edit `slack-bot/.env`:
+
+| Variable | Description |
+|----------|-------------|
+| `SLACK_BOT_TOKEN` | Bot User OAuth Token (`xoxb-...`) |
+| `SLACK_APP_TOKEN` | App-Level Token for Socket Mode (`xapp-...`) |
+| `SLACK_CHANNEL_ID` | Channel ID of `#habit-tracker-bot` |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `GITHUB_TOKEN` | GitHub Personal Access Token with `repo` scope |
+| `GITHUB_REPO` | `Ryosuke-Ha/habit-tracker` |
+
+#### 3. Local setup & start
+
+```bash
+cd slack-bot
+
+python3 -m venv venv
+source venv/bin/activate
+
+pip install -r requirements.txt
+
+python main.py
+```
+
+#### 4. Usage
+
+Post a message in `#habit-tracker-bot`:
+
+```
+TODOカードの完了時のアニメーションを追加してください
+```
+
+The bot will:
+1. Investigate related files
+2. Report the fix plan to Slack
+3. Create a branch (`fix/YYYYMMDD-HHMMSS`)
+4. Commit the changes
+5. Open a PR and notify Slack
+6. Poll CI every 30s (up to 10 minutes)
+7. Auto-merge when CI passes
+8. Report completion to Slack
+
+#### 5. Deploy to Railway
+
+Set the environment variables above in Railway's dashboard, then connect the `slack-bot/` subdirectory as the root.
+
+---
+
 ## Database Migrations (Alembic)
 
 ```bash
