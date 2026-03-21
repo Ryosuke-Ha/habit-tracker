@@ -50,6 +50,19 @@ interface TodoItemProps {
   onEdit: (data: { title: string; scheduled_time: string; location: string }) => Promise<void>;
 }
 
+// バーストパーティクルの色リスト
+const BURST_COLORS = [
+  "bg-green-400",
+  "bg-emerald-300",
+  "bg-teal-400",
+  "bg-lime-400",
+  "bg-yellow-300",
+  "bg-green-300",
+];
+
+// 放射するパーティクル数
+const PARTICLE_COUNT = 8;
+
 export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemProps) {
   const [mode, setMode] = useState<"view" | "edit" | "confirm-delete">("view");
   const [editTitle, setEditTitle] = useState(item.title);
@@ -63,6 +76,14 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
   const [subtasksLoaded, setSubtasksLoaded] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
 
+  // --- 完了アニメーション用 state ---
+  // "idle" | "completing" | "done"
+  // completing: チェック直後のアニメーション再生中
+  const [checkAnim, setCheckAnim] = useState<"idle" | "completing">("idle");
+  const [showBurst, setShowBurst] = useState(false);
+  const [rowFlash, setRowFlash] = useState(false);
+  const prevIsDoneRef = useRef<boolean>(false);
+
   const isDone = item.kind === "habit" ? item.isChecked : item.isCompleted;
   const subtaskType = item.kind === "habit" ? "habit_log" : "persistent_todo";
   const subtaskTodoId = item.kind === "habit" ? item.logId : item.id;
@@ -70,6 +91,28 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
   const completedCount = subtasks.filter((s) => s.is_completed).length;
   const totalCount = subtasks.length;
   const allDone = totalCount > 0 && completedCount === totalCount;
+
+  // isDone が false → true になった瞬間にアニメーションを発火
+  useEffect(() => {
+    const prev = prevIsDoneRef.current;
+    prevIsDoneRef.current = isDone;
+
+    if (!prev && isDone) {
+      // バウンス + バーストを発火
+      setCheckAnim("completing");
+      setShowBurst(true);
+      setRowFlash(true);
+
+      // バウンスアニメーション終了後にリセット
+      const t1 = setTimeout(() => setCheckAnim("idle"), 500);
+      // バーストは少し長めに見せてから消す
+      const t2 = setTimeout(() => setShowBurst(false), 600);
+      // 行フラッシュも同様
+      const t3 = setTimeout(() => setRowFlash(false), 750);
+
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    }
+  }, [isDone]);
 
   useEffect(() => {
     if (expanded && !subtasksLoaded) {
@@ -172,7 +215,9 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
   return (
     <li
       className={`rounded-xl border overflow-hidden transition-colors cursor-pointer ${
-        isDone
+        rowFlash
+          ? "animate-row-complete-flash"
+          : isDone
           ? "bg-gray-50 border-gray-100"
           : item.kind === "persistent"
           ? "bg-amber-50 border-amber-300"
@@ -182,19 +227,43 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
     >
       {/* Main row */}
       <div className="flex items-center gap-3 p-4">
-        {/* Check button */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-            isDone ? "bg-green-500 border-green-500 text-white" : "border-gray-300 hover:border-black"
-          }`}
-        >
-          {isDone && (
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-        </button>
+        {/* Check button — バーストパーティクル用に relative */}
+        <div className="relative flex-shrink-0 w-6 h-6">
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+              checkAnim === "completing" ? "animate-check-bounce" : ""
+            } ${
+              isDone ? "bg-green-500 border-green-500 text-white" : "border-gray-300 hover:border-black"
+            }`}
+          >
+            {isDone && (
+              <svg
+                className={`w-3 h-3 ${checkAnim === "completing" ? "animate-checkmark-pop" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={3}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+
+          {/* バーストパーティクル */}
+          {showBurst &&
+            Array.from({ length: PARTICLE_COUNT }).map((_, i) => {
+              const angle = (360 / PARTICLE_COUNT) * i;
+              const colorClass = BURST_COLORS[i % BURST_COLORS.length];
+              return (
+                <span
+                  key={i}
+                  className={`burst-particle ${colorClass}`}
+                  style={{ "--angle": `${angle}deg` } as React.CSSProperties}
+                />
+              );
+            })}
+        </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">

@@ -16,3 +16,65 @@
 .animate-slide-up-fade-in {
   animation: slideUpFadeIn 0.8s ease-out forwards;
 }
+
+/* ----------------------------------------
+   TODO完了アニメーション
+   ---------------------------------------- */
+
+/* チェックボタン: 押した瞬間に弾むバウンス */
+@keyframes checkBounce {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.45); }
+  55%  { transform: scale(0.85); }
+  75%  { transform: scale(1.15); }
+  90%  { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+.animate-check-bounce {
+  animation: checkBounce 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+}
+
+/* チェックマーク SVG: フェードイン＋スケールイン */
+@keyframes checkmarkPop {
+  0%   { opacity: 0; transform: scale(0.3) rotate(-20deg); }
+  60%  { opacity: 1; transform: scale(1.2) rotate(5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+.animate-checkmark-pop {
+  animation: checkmarkPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* 行全体: チェック時にふわっと緑でハイライト */
+@keyframes rowCompleteFlash {
+  0%   { background-color: rgba(134, 239, 172, 0.55); } /* green-300/55 */
+  100% { background-color: transparent; }
+}
+
+.animate-row-complete-flash {
+  animation: rowCompleteFlash 0.7s ease-out forwards;
+}
+
+/* バーストパーティクル: 中心から放射状に広がって消える */
+@keyframes burstParticle {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(28px) scale(0);
+  }
+}
+
+.burst-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  pointer-events: none;
+  top: 50%;
+  left: 50%;
+  animation: burstParticle 0.5s ease-out forwards;
+}
