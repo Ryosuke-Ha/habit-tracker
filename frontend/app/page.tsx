@@ -226,66 +226,121 @@ export default function Home() {
   async function handleTryToggle(itemId: number) {
     const email = session?.user?.email;
     if (!email) return;
-    const item = tryItems.find((i) => i.id === itemId);
-    if (!item) return;
-    const res = await fetch(`${API}/reviews/kpt/${itemId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "X-User-Email": email },
-      body: JSON.stringify({ is_completed: !item.is_completed }),
-    });
-    const updated: TryItem = await res.json();
-    setTryItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+    const prevItem = tryItems.find((i) => i.id === itemId);
+    if (!prevItem) return;
+    setTryItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, is_completed: !i.is_completed } : i)));
+    try {
+      const res = await fetch(`${API}/reviews/kpt/${itemId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        body: JSON.stringify({ is_completed: !prevItem.is_completed }),
+      });
+      const updated: TryItem = await res.json();
+      setTryItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+    } catch {
+      setTryItems((prev) => prev.map((i) => (i.id === itemId ? prevItem : i)));
+    }
   }
 
   async function handleToggleHabit(habitId: number) {
-    const res = await fetch(`${API}/logs/${habitId}/toggle`, { method: "POST" });
-    const updated: LogEntry = await res.json();
-    setHabitLogs((prev) => ({ ...prev, [updated.habit_id]: { logId: updated.id, isChecked: updated.is_checked } }));
+    const prevLog = habitLogs[habitId];
+    setHabitLogs((prev) => ({
+      ...prev,
+      [habitId]: { logId: prevLog?.logId ?? 0, isChecked: !(prevLog?.isChecked ?? false) },
+    }));
+    try {
+      const res = await fetch(`${API}/logs/${habitId}/toggle`, { method: "POST" });
+      const updated: LogEntry = await res.json();
+      setHabitLogs((prev) => ({ ...prev, [updated.habit_id]: { logId: updated.id, isChecked: updated.is_checked } }));
+    } catch {
+      setHabitLogs((prev) => {
+        if (prevLog !== undefined) return { ...prev, [habitId]: prevLog };
+        const next = { ...prev };
+        delete next[habitId];
+        return next;
+      });
+    }
   }
 
   async function handleDeleteHabit(habitId: number) {
-    await fetch(`${API}/habits/${habitId}`, { method: "DELETE" });
+    const prevHabits = habits;
     setHabits((prev) => prev.filter((h) => h.id !== habitId));
+    try {
+      await fetch(`${API}/habits/${habitId}`, { method: "DELETE" });
+    } catch {
+      setHabits(prevHabits);
+    }
   }
 
-  async function handleEditHabit(habitId: number, data: { title: string; scheduled_time: string; location: string }) {
-    const res = await fetch(`${API}/habits/${habitId}`, {
+  function handleEditHabit(habitId: number, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
+    const prevHabit = habits.find((h) => h.id === habitId);
+    setHabits((prev) =>
+      prev.map((h) => (h.id === habitId ? { ...h, ...data } : h)).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time))
+    );
+    fetch(`${API}/habits/${habitId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
-    });
-    const updated: Habit = await res.json();
-    setHabits((prev) => prev.map((h) => (h.id === habitId ? updated : h)).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
+    })
+      .then((r) => r.json())
+      .then((updated: Habit) => {
+        setHabits((prev) => prev.map((h) => (h.id === habitId ? updated : h)).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
+      })
+      .catch(() => {
+        if (prevHabit) setHabits((prev) => prev.map((h) => (h.id === habitId ? prevHabit : h)).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
+      });
+    return Promise.resolve();
   }
 
   async function handleTogglePersistent(id: number) {
     const email = session?.user?.email;
     if (!email) return;
-    const res = await fetch(`${API}/persistent-todos/${id}/complete`, {
-      method: "POST",
-      headers: { "X-User-Email": email },
-    });
-    const updated: PersistentTodo = await res.json();
-    setPersistentTodos((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    const prevTodo = persistentTodos.find((t) => t.id === id);
+    setPersistentTodos((prev) => prev.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t)));
+    try {
+      const res = await fetch(`${API}/persistent-todos/${id}/complete`, {
+        method: "POST",
+        headers: { "X-User-Email": email },
+      });
+      const updated: PersistentTodo = await res.json();
+      setPersistentTodos((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    } catch {
+      if (prevTodo) setPersistentTodos((prev) => prev.map((t) => (t.id === id ? prevTodo : t)));
+    }
   }
 
   async function handleDeletePersistent(id: number) {
     const email = session?.user?.email;
     if (!email) return;
-    await fetch(`${API}/persistent-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+    const prevTodos = persistentTodos;
     setPersistentTodos((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await fetch(`${API}/persistent-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+    } catch {
+      setPersistentTodos(prevTodos);
+    }
   }
 
-  async function handleEditPersistent(id: number, data: { title: string; scheduled_time: string; location: string }) {
+  function handleEditPersistent(id: number, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
     const email = session?.user?.email;
-    if (!email) return;
-    const res = await fetch(`${API}/persistent-todos/${id}`, {
+    if (!email) return Promise.resolve();
+    const prevTodo = persistentTodos.find((t) => t.id === id);
+    setPersistentTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, title: data.title, scheduled_time: data.scheduled_time || null, location: data.location || null } : t))
+    );
+    fetch(`${API}/persistent-todos/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-User-Email": email },
       body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time || null, location: data.location }),
-    });
-    const updated: PersistentTodo = await res.json();
-    setPersistentTodos((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    })
+      .then((r) => r.json())
+      .then((updated: PersistentTodo) => {
+        setPersistentTodos((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      })
+      .catch(() => {
+        if (prevTodo) setPersistentTodos((prev) => prev.map((t) => (t.id === id ? prevTodo : t)));
+      });
+    return Promise.resolve();
   }
 
   return (

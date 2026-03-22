@@ -153,45 +153,66 @@ export default function WeeklyReviewPage() {
 
   async function handleToggleComplete(item: KPTItem) {
     const email = session!.user!.email!;
-    const res = await fetch(`${API}/reviews/kpt/${item.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "X-User-Email": email },
-      body: JSON.stringify({ is_completed: !item.is_completed }),
-    });
-    const updated: KPTItem = await res.json();
     setReview((prev) =>
-      prev
-        ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === updated.id ? updated : i)) }
-        : prev
+      prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === item.id ? { ...i, is_completed: !i.is_completed } : i)) } : prev
     );
+    try {
+      const res = await fetch(`${API}/reviews/kpt/${item.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        body: JSON.stringify({ is_completed: !item.is_completed }),
+      });
+      const updated: KPTItem = await res.json();
+      setReview((prev) =>
+        prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === updated.id ? updated : i)) } : prev
+      );
+    } catch {
+      setReview((prev) =>
+        prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === item.id ? item : i)) } : prev
+      );
+    }
   }
 
   async function handleEditSave(itemId: number) {
     if (!editContent.trim()) return;
     const email = session!.user!.email!;
-    const res = await fetch(`${API}/reviews/kpt/${itemId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "X-User-Email": email },
-      body: JSON.stringify({ content: editContent.trim() }),
-    });
-    const updated: KPTItem = await res.json();
+    const content = editContent.trim();
+    const prevItem = review?.kpt_items.find((i) => i.id === itemId);
     setReview((prev) =>
-      prev
-        ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === updated.id ? updated : i)) }
-        : prev
+      prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === itemId ? { ...i, content } : i)) } : prev
     );
     setEditingId(null);
+    try {
+      const res = await fetch(`${API}/reviews/kpt/${itemId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        body: JSON.stringify({ content }),
+      });
+      const updated: KPTItem = await res.json();
+      setReview((prev) =>
+        prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === updated.id ? updated : i)) } : prev
+      );
+    } catch {
+      if (prevItem) setReview((prev) =>
+        prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === itemId ? prevItem : i)) } : prev
+      );
+    }
   }
 
   async function handleDelete(itemId: number) {
     const email = session!.user!.email!;
-    await fetch(`${API}/reviews/kpt/${itemId}`, {
-      method: "DELETE",
-      headers: { "X-User-Email": email },
-    });
+    const prevItems = review?.kpt_items ?? [];
     setReview((prev) =>
       prev ? { ...prev, kpt_items: prev.kpt_items.filter((i) => i.id !== itemId) } : prev
     );
+    try {
+      await fetch(`${API}/reviews/kpt/${itemId}`, {
+        method: "DELETE",
+        headers: { "X-User-Email": email },
+      });
+    } catch {
+      setReview((prev) => prev ? { ...prev, kpt_items: prevItems } : prev);
+    }
   }
 
   function itemsOf(type: KPTType): KPTItem[] {
@@ -346,7 +367,7 @@ export default function WeeklyReviewPage() {
                           value={editContent}
                           onChange={(e) => setEditContent(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSave(item.id); }
+                            if (e.key === "Enter") e.preventDefault();
                             if (e.key === "Escape") setEditingId(null);
                           }}
                           onBlur={() => window.scrollTo(0, 0)}
@@ -412,7 +433,7 @@ export default function WeeklyReviewPage() {
                   value={newContent}
                   onChange={(e) => setNewContent(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAdd(); }
+                    if (e.key === "Enter") e.preventDefault();
                     if (e.key === "Escape") { setAddingType(null); setNewContent(""); }
                   }}
                   onBlur={() => window.scrollTo(0, 0)}
