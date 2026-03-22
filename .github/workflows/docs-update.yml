@@ -1,0 +1,46 @@
+name: Auto Update Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'slack-bot/**'
+
+permissions:
+  contents: write
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install anthropic
+
+      - name: Update documentation
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: python scripts/update_docs.py
+
+      - name: Commit updated docs
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git add docs/ CHANGELOG.md README.md
+          git diff --staged --quiet || git commit -m "docs: auto-update documentation [skip ci]"
+          git push

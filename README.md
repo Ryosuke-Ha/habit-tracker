@@ -1,86 +1,195 @@
-# Habit Tracker
+# habit-tracker
 
-A habit management web app based on the "implementation intentions" concept from Atomic Habits.
+[![Backend CI](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/frontend-ci.yml)
+[![Vercel](https://img.shields.io/badge/deploy-Vercel-black?logo=vercel)](https://habit-tracker-two-peach.vercel.app)
 
-## Stack
+A habit management web app based on the philosophy of Atomic Habits.
 
-- **Frontend**: Next.js 14 (TypeScript, App Router, Tailwind CSS) — port 3000
-- **Backend**: FastAPI (Python 3.12, SQLite / PostgreSQL) — port 8000
-
----
-
-## Setup & Running
-
-### 1. Backend
-
-```bash
-cd backend
-
-# Create virtual environment (first time only)
-python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies (first time only)
-pip install -r requirements.txt
-
-# Copy and configure environment variables
-cp .env.example .env
-```
-
-Edit `backend/.env`:
-
-| Variable | Description | Default (dev) |
-|----------|-------------|---------------|
-| `DATABASE_URL` | DB connection URL. PostgreSQL (production) or SQLite path (development) | `sqlite:///./habit_tracker.db` |
-| `FRONTEND_URL` | Frontend URL (CORS allowlist) | `http://localhost:3000` |
-
-```bash
-# Run database migrations
-alembic upgrade head
-
-# Start server
-uvicorn main:app --reload
-```
-
-The SQLite database is created automatically on first run, along with seed data (weekday/weekend templates).
-
-API docs: http://localhost:8000/docs
+**Demo:** https://habit-tracker-two-peach.vercel.app
 
 ---
 
-### 2. Frontend
+## Screenshots
+
+> Screenshots coming soon
+
+---
+
+## Features
+
+- **Daily habit TODO management** — Template system with day-of-week settings (weekday/weekend)
+- **Persistent TODOs** — Tasks that remain visible every day until completed
+- **Subtask support** — Break down each TODO into subtasks with progress tracking
+- **Weekly review (KPT)** — Structured weekly reflection using Keep / Problem / Try format
+- **Monthly review** — Achievement rate graphs and monthly goal setting
+- **Google authentication** — Sign in with your Google account
+- **Cross-device settings sync** — Sync habit templates between PC and mobile
+
+---
+
+## Tech Stack
+
+### Frontend
+| Technology | Version |
+|------------|---------|
+| Next.js (TypeScript, App Router) | 14.2.3 |
+| Tailwind CSS | 3.3.0 |
+| NextAuth.js | 4.24.13 |
+| Recharts | 3.8.0 |
+
+### Backend
+| Technology | Version |
+|------------|---------|
+| FastAPI | 0.111.0 |
+| SQLAlchemy + Alembic | 2.0.30 / 1.13.1 |
+| PostgreSQL (Supabase) | — |
+
+### Infrastructure
+| Purpose | Service |
+|---------|---------|
+| Frontend | Vercel |
+| Backend + Slack Bot | Railway |
+| Database | Supabase (PostgreSQL) |
+| CI/CD | GitHub Actions |
+
+### AI
+| Purpose | Service |
+|---------|---------|
+| Slack Auto-Fix Bot | Anthropic Claude API |
+
+---
+
+## Architecture Diagram
+
+### Infrastructure
+
+```mermaid
+graph TB
+    subgraph Client
+        Browser["Browser / Mobile"]
+    end
+
+    subgraph Vercel["Vercel (Frontend)"]
+        Next["Next.js 14<br/>App Router"]
+    end
+
+    subgraph Railway["Railway (Backend)"]
+        FastAPI["FastAPI<br/>Python 3.11"]
+        SlackBot["Slack Auto-Fix Bot<br/>Claude API"]
+    end
+
+    subgraph Supabase
+        PG["PostgreSQL"]
+    end
+
+    subgraph Google
+        OAuth["OAuth 2.0"]
+    end
+
+    Browser -->|HTTPS| Next
+    Next -->|REST API| FastAPI
+    Next -->|OAuth| OAuth
+    FastAPI -->|SQL| PG
+    SlackBot -->|SQL| PG
+```
+
+### CI/CD Flow
+
+```mermaid
+graph LR
+    Push["git push / PR"] --> GHA["GitHub Actions"]
+
+    subgraph GHA["GitHub Actions"]
+        direction TB
+        FE["Frontend CI<br/>type-check → test → build"]
+        BE["Backend CI<br/>flake8 → pytest"]
+    end
+
+    FE --> Vercel["Vercel<br/>(auto deploy)"]
+    BE --> Railway["Railway<br/>(auto deploy)"]
+```
+
+### Slack Auto-Fix Bot Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Slack as Slack<br/>#habit-tracker-bot
+    participant Bot as Slack Bot<br/>(Railway)
+    participant Claude as Claude API
+    participant GitHub
+
+    User->>Slack: "Fix the login button bug"
+    Slack->>Bot: Event received
+    Bot->>Claude: Analyze the request
+    Claude-->>Bot: Fix plan
+    Bot->>Slack: Report fix plan
+    Bot->>GitHub: Create branch & commit
+    Bot->>GitHub: Open PR
+    Bot->>Slack: Notify PR URL
+    loop Poll every 30s
+        Bot->>GitHub: Check CI status
+    end
+    GitHub-->>Bot: CI passed
+    Bot->>GitHub: Auto-merge
+    Bot->>Slack: Notify completion
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20+
+- Python 3.11+
+- Git
+
+### Setup
+
+#### 1. Clone the repository
+
+```bash
+git clone https://github.com/Ryosuke-Ha/habit-tracker.git
+cd habit-tracker
+```
+
+#### 2. Frontend setup
 
 ```bash
 cd frontend
-
-# Copy and configure environment variables
-cp .env.example .env.local
-```
-
-Edit `frontend/.env.local`:
-
-| Variable | How to obtain |
-|----------|--------------|
-| `GOOGLE_CLIENT_ID` | Create an OAuth 2.0 client ID in [Google Cloud Console](https://console.cloud.google.com/) |
-| `GOOGLE_CLIENT_SECRET` | Same as above |
-| `NEXTAUTH_SECRET` | Generate with the command below |
-| `NEXTAUTH_URL` | `http://localhost:3000` (dev) / your production URL |
-| `NEXT_PUBLIC_BACKEND_URL` | FastAPI URL (dev: `http://localhost:8000`) |
-
-**Generate NEXTAUTH_SECRET:**
-```bash
-openssl rand -base64 32
-```
-Paste the output as the value of `NEXTAUTH_SECRET`.
-
-**Google OAuth configuration:**
-- Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
-
-```bash
-# Install dependencies (first time only)
 npm install
+cp .env.example .env.local
+# Edit .env.local with your environment variables (see Environment Variables below)
+```
 
-# Start dev server
+#### 3. Backend setup
+
+```bash
+cd ../backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your environment variables (see Environment Variables below)
+```
+
+#### 4. Run DB migration
+
+```bash
+alembic upgrade head
+```
+
+#### 5. Start the app
+
+Open two terminals and run:
+
+```bash
+# Backend (in the backend/ directory)
+uvicorn main:app --reload --port 8000
+
+# Frontend (in the frontend/ directory)
 npm run dev
 ```
 
@@ -88,170 +197,95 @@ Open http://localhost:3000 in your browser.
 
 ---
 
-## Slack Auto-Fix Bot
+## Environment Variables
 
-A Claude-powered bot that receives instructions in a Slack channel, modifies the codebase via GitHub, creates a PR, waits for CI, and auto-merges.
-
-### Setup
-
-#### 1. Slack App configuration
-
-1. Create a new Slack App at https://api.slack.com/apps
-2. Enable **Socket Mode** and generate an App-Level Token (`xapp-...`) with `connections:write` scope
-3. Enable **Event Subscriptions** → Subscribe to bot events: `message.channels`
-4. Add Bot Token Scopes: `channels:history`, `chat:write`
-5. Install the app to your workspace and invite it to `#habit-tracker-bot`
-
-#### 2. Environment variables
-
-```bash
-cd slack-bot
-cp .env.example .env
-```
-
-Edit `slack-bot/.env`:
+### Frontend (`frontend/.env.local`)
 
 | Variable | Description |
 |----------|-------------|
-| `SLACK_BOT_TOKEN` | Bot User OAuth Token (`xoxb-...`) |
-| `SLACK_APP_TOKEN` | App-Level Token for Socket Mode (`xapp-...`) |
-| `SLACK_CHANNEL_ID` | Channel ID of `#habit-tracker-bot` |
-| `ANTHROPIC_API_KEY` | Anthropic API key |
-| `GITHUB_TOKEN` | GitHub Personal Access Token with `repo` scope |
-| `GITHUB_REPO` | `Ryosuke-Ha/habit-tracker` |
+| `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID from Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 Client Secret from Google Cloud Console |
+| `NEXTAUTH_SECRET` | Secret key for NextAuth (generate with `openssl rand -base64 32`) |
+| `NEXTAUTH_URL` | App URL (development: `http://localhost:3000`) |
+| `NEXT_PUBLIC_BACKEND_URL` | FastAPI URL (development: `http://localhost:8000`) |
 
-#### 3. Local setup & start
+### Backend (`backend/.env`)
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | DB connection URI (development: `sqlite:///./habit_tracker.db`, production: Supabase Transaction pooler URI) |
+| `FRONTEND_URL` | Frontend URL for CORS (e.g. `http://localhost:3000`) |
+
+### Slack Bot (`slack-bot/.env`)
+
+| Variable | Description |
+|----------|-------------|
+| `SLACK_BOT_TOKEN` | Bot Token starting with `xoxb-` |
+| `SLACK_APP_TOKEN` | App-Level Token starting with `xapp-` (for Socket Mode) |
+| `SLACK_CHANNEL_ID` | Target channel ID (e.g. `#habit-tracker-bot`) |
+| `ANTHROPIC_API_KEY` | Anthropic API Key |
+| `GITHUB_TOKEN` | GitHub Personal Access Token (requires `repo` scope) |
+| `GITHUB_REPO` | Target repository (e.g. `Ryosuke-Ha/habit-tracker`) |
+
+---
+
+## Slack Auto-Fix Bot
+
+An AI-powered bot that receives natural language instructions in Slack, modifies the codebase via GitHub, and automatically opens and merges PRs.
+
+### Setup
+
+1. Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps) and enable Socket Mode
+2. Add Bot Token Scopes: `chat:write`, `channels:read`, `files:write`
+3. Fill in `slack-bot/.env` with your tokens
+4. Deploy to Railway, or run locally:
 
 ```bash
 cd slack-bot
-
-python3 -m venv venv
+python -m venv venv
 source venv/bin/activate
-
 pip install -r requirements.txt
-
+cp .env.example .env
+# Edit .env
 python main.py
 ```
 
-#### 4. Usage
+### Usage
 
-Post a message in `#habit-tracker-bot`:
+Mention the bot in `#habit-tracker-bot` with your instruction:
 
 ```
-TODOカードの完了時のアニメーションを追加してください
+@habit-tracker-bot Change the chart color on the monthly review page to blue
+@habit-tracker-bot Add a description to the login screen
+@habit-tracker-bot Add created_at to the backend API response
 ```
 
-The bot will:
-1. Investigate related files
-2. Report the fix plan to Slack
-3. Create a branch (`fix/YYYYMMDD-HHMMSS`)
-4. Commit the changes
-5. Open a PR and notify Slack
-6. Poll CI every 30s (up to 10 minutes)
-7. Auto-merge when CI passes
-8. Report completion to Slack
+The bot will automatically:
 
-#### 5. Deploy to Railway
-
-Set the environment variables above in Railway's dashboard, then connect the `slack-bot/` subdirectory as the root.
+1. Investigate related files and report the fix plan to Slack
+2. Create a feature branch and commit the changes
+3. Open a Pull Request and notify Slack with the PR URL
+4. Poll GitHub Actions CI every 30 seconds until it passes
+5. Auto-merge the PR and notify completion
 
 ---
 
-## Database Migrations (Alembic)
+## GitHub Actions Secrets
 
-```bash
-cd backend
-source venv/bin/activate
+The following repository secrets are required for GitHub Actions workflows to work correctly.
 
-# Apply all pending migrations
-alembic upgrade head
+Go to **Settings → Secrets and variables → Actions → New repository secret** and add each one.
 
-# Roll back one migration
-alembic downgrade -1
+| Secret | Required by | Description |
+|--------|-------------|-------------|
+| `ANTHROPIC_API_KEY` | `docs-update.yml` | Anthropic API key used by the auto-documentation workflow to call Claude |
 
-# Create a new migration after changing models.py
-alembic revision --autogenerate -m "description"
+> **Note:** `GITHUB_TOKEN` is provided automatically by GitHub Actions and does not need to be added manually.
 
-# Show current migration state
-alembic current
-```
-
-**Switching to PostgreSQL (Supabase):**
-1. Create a project on [Supabase](https://supabase.com/)
-2. Copy the **Transaction pooler** URI from Project Settings → Database → Connection string
-3. Set `DATABASE_URL=<uri>` in `backend/.env`
-4. Run `alembic upgrade head` to create all tables
+The other secrets used in production (Google OAuth, Supabase, Slack tokens, etc.) are set directly in the **Vercel** and **Railway** dashboards — they do not need to be added as GitHub repository secrets.
 
 ---
 
-## Features
+## License
 
-- **Daily TODO list** — unified view of habit todos and carry-over todos, sorted by scheduled time
-- **Habit templates** — separate templates for weekdays and weekends
-- **Carry-over todos** — persistent todos that carry over across days
-- **Subtasks** — accordion subtask list with progress bar for any todo
-- **Weekly KPT review** — Keep / Problem / Try retrospective per week
-- **Monthly review** — achievement stats with charts and next-month goal setting
-
----
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/templates` | List templates |
-| GET | `/templates/{id}/habits` | List habits for a template |
-| POST | `/habits` | Add a habit |
-| PUT | `/habits/{id}` | Edit a habit |
-| DELETE | `/habits/{id}` | Delete a habit |
-| GET | `/logs/today?template_id={id}` | Today's check state |
-| POST | `/logs/{habit_id}/toggle` | Toggle check |
-| GET | `/persistent-todos` | List carry-over todos |
-| POST | `/persistent-todos` | Create carry-over todo |
-| PUT | `/persistent-todos/{id}` | Edit carry-over todo |
-| POST | `/persistent-todos/{id}/complete` | Toggle completion |
-| DELETE | `/persistent-todos/{id}` | Delete carry-over todo |
-| GET | `/subtasks?todo_type=&todo_id=` | List subtasks |
-| POST | `/subtasks` | Add subtask |
-| POST | `/subtasks/{id}/toggle` | Toggle subtask |
-| DELETE | `/subtasks/{id}` | Delete subtask |
-| GET | `/reviews/weekly/current` | Get/create current week's review |
-| POST | `/reviews/weekly/{id}/kpt` | Add KPT item |
-| PUT | `/reviews/kpt/{id}` | Edit KPT item |
-| DELETE | `/reviews/kpt/{id}` | Delete KPT item |
-| GET | `/reviews/monthly/current` | Get/create current month's review |
-| GET | `/reviews/monthly/{year_month}/stats` | Monthly achievement stats |
-| PUT | `/reviews/monthly/{id}` | Update next-month goal |
-
----
-
-## Directory Structure
-
-```
-habit-tracker/
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx                  # Daily TODO screen
-│   │   ├── templates/page.tsx        # Template management
-│   │   ├── review/weekly/page.tsx    # Weekly KPT review
-│   │   └── review/monthly/page.tsx  # Monthly review
-│   └── components/
-│       ├── TodoItem.tsx              # Unified todo card (habits + carry-over)
-│       ├── HabitList.tsx             # Sorted unified todo list
-│       ├── TemplateSelector.tsx      # Weekday/weekend selector
-│       ├── LoadingOverlay.tsx        # Initial loading animation
-│       └── HamburgerMenu.tsx         # Navigation menu
-├── backend/
-│   ├── main.py                       # FastAPI app + CORS + seed data
-│   ├── models.py                     # SQLAlchemy models
-│   ├── database.py                   # DB connection (env-var driven)
-│   ├── requirements.txt
-│   └── routers/
-│       ├── templates.py
-│       ├── habits.py
-│       ├── reviews.py
-│       ├── monthly_reviews.py
-│       ├── persistent_todos.py
-│       └── subtasks.py
-└── README.md
-```
+[MIT License](LICENSE)
