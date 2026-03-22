@@ -24,8 +24,8 @@ export interface SubTask {
 
 export interface HabitEntry {
   kind: "habit";
-  id: number;        // habit id
-  logId: number;     // DailyLog id (for subtask API)
+  logId: number;          // DailyLog id (for toggle, subtask API)
+  habitId: number | null; // Habit id (null for standalone one-off logs)
   title: string;
   scheduledTime: string;
   location: string;

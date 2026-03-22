@@ -4,21 +4,22 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import LoadingOverlay from "@/components/LoadingOverlay";
-import HabitList from "@/components/HabitList";
+import HabitList, { DailyLogEntry } from "@/components/HabitList";
 import HamburgerMenu from "@/components/HamburgerMenu";
+import { useSetting } from "@/hooks/useSetting";
 
 interface Template { id: number; name: string; }
 
-interface Habit {
+interface LogApiResponse {
   id: number;
-  template_id: number;
+  habit_id: number | null;
   title: string;
   scheduled_time: string;
   location: string;
+  is_checked: boolean;
   order: number;
 }
 
-interface LogEntry { id: number; habit_id: number; is_checked: boolean; }
 interface TryItem { id: number; content: string; is_completed: boolean; }
 type MonthlyGoalStatus = "no_goal" | "has_goal";
 
@@ -50,6 +51,7 @@ type Phase = "initial" | "loading" | "content";
 export default function Home() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { getSetting, setSetting, ready: settingReady } = useSetting();
   const [phase, setPhase] = useState<Phase>("initial");
   const [animationDone, setAnimationDone] = useState(false);
   const [dataReady, setDataReady] = useState(false);
@@ -57,8 +59,7 @@ export default function Home() {
 
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [templateName, setTemplateName] = useState<string>("");
-  const [habits, setHabits] = useState<Habit[]>([]);
-  const [habitLogs, setHabitLogs] = useState<Record<number, { logId: number; isChecked: boolean }>>({});
+  const [dailyLogs, setDailyLogs] = useState<DailyLogEntry[]>([]);
   const [persistentTodos, setPersistentTodos] = useState<PersistentTodo[]>([]);
   const [tryItems, setTryItems] = useState<TryItem[]>([]);
   const [tryStatus, setTryStatus] = useState<"no_review" | "no_items" | "has_items">("no_review");
@@ -77,16 +78,20 @@ export default function Home() {
   useEffect(() => {
     if (status === "loading") return;
     if (status === "unauthenticated") { router.replace("/login"); return; }
-    const alreadyLaunched = localStorage.getItem("habit_app_launched");
-    if (alreadyLaunched) {
-      setAnimationDone(true);
-      setShowAnimation(false);
-    } else {
-      setShowAnimation(true);
-    }
+    if (!settingReady) return;
+
+    getSetting("habit_app_launched").then((val) => {
+      if (val) {
+        setAnimationDone(true);
+        setShowAnimation(false);
+      } else {
+        setShowAnimation(true);
+      }
+    });
     setPhase("loading");
     fetchData();
-  }, [status, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, router, settingReady]);
 
   useEffect(() => {
     if (animationDone && dataReady) setPhase("content");
@@ -107,7 +112,7 @@ export default function Home() {
       const templates: Template[] = await templatesRes.json();
 
       let matched: Template | undefined;
-      const storedMap = localStorage.getItem("habit_day_template_map");
+      const storedMap = await getSetting("habit_day_template_map");
       if (storedMap) {
         try {
           const map: Record<string, string> = JSON.parse(storedMap);
@@ -125,20 +130,22 @@ export default function Home() {
       setTemplateId(matched.id);
       setTemplateName(matched.name);
 
-      const [habitsRes, logsRes, tryRes, goalRes, persistentRes] = await Promise.all([
-        fetch(`${API}/templates/${matched.id}/habits`),
+      const [logsRes, tryRes, goalRes, persistentRes] = await Promise.all([
         fetch(`${API}/logs/today?template_id=${matched.id}`),
         email ? fetch(`${API}/reviews/weekly/current/try-items`, { headers: authHeaders }) : Promise.resolve(null),
         email ? fetch(`${API}/reviews/monthly/current/goal`, { headers: authHeaders }) : Promise.resolve(null),
         email ? fetch(`${API}/persistent-todos`, { headers: authHeaders }) : Promise.resolve(null),
       ]);
 
-      const habitsData: Habit[] = await habitsRes.json();
-      const logsData: LogEntry[] = await logsRes.json();
-      setHabits(habitsData);
-      const logMap: Record<number, { logId: number; isChecked: boolean }> = {};
-      logsData.forEach((l) => { logMap[l.habit_id] = { logId: l.id, isChecked: l.is_checked }; });
-      setHabitLogs(logMap);
+      const logsData: LogApiResponse[] = await logsRes.json();
+      setDailyLogs(logsData.map((l) => ({
+        logId: l.id,
+        habitId: l.habit_id,
+        title: l.title,
+        scheduledTime: l.scheduled_time,
+        location: l.location,
+        isChecked: l.is_checked,
+      })));
 
       if (tryRes) {
         if (tryRes.status === 404) {
@@ -200,25 +207,23 @@ export default function Home() {
       }
     } else {
       if (!templateId) return;
-      const tempId = -Date.now();
-      const tempHabit: Habit = { id: tempId, template_id: templateId, title, scheduled_time: time, location, order: 0 };
-      setHabits((prev) => [...prev, tempHabit].sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
+      const tempLogId = -Date.now();
+      const tempLog: DailyLogEntry = { logId: tempLogId, habitId: null, title, scheduledTime: time, location, isChecked: false };
+      setDailyLogs((prev) => [...prev, tempLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
       closeModal();
       try {
-        const res = await fetch(`${API}/habits`, {
+        const res = await fetch(`${API}/logs/standalone`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title, scheduled_time: time, location, template_id: templateId }),
         });
-        const newHabit: Habit = await res.json();
-        const logRes = await fetch(`${API}/logs/today?template_id=${templateId}`);
-        const logsData: LogEntry[] = await logRes.json();
-        setHabits((prev) => prev.map((h) => (h.id === tempId ? newHabit : h)).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
-        const logMap: Record<number, { logId: number; isChecked: boolean }> = {};
-        logsData.forEach((l) => { logMap[l.habit_id] = { logId: l.id, isChecked: l.is_checked }; });
-        setHabitLogs(logMap);
+        const newLog: LogApiResponse = await res.json();
+        setDailyLogs((prev) =>
+          prev.map((l) => l.logId === tempLogId ? { logId: newLog.id, habitId: newLog.habit_id, title: newLog.title, scheduledTime: newLog.scheduled_time, location: newLog.location, isChecked: newLog.is_checked } : l)
+            .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
+        );
       } catch {
-        setHabits((prev) => prev.filter((h) => h.id !== tempId));
+        setDailyLogs((prev) => prev.filter((l) => l.logId !== tempLogId));
       }
     }
   }
@@ -240,56 +245,48 @@ export default function Home() {
     }
   }
 
-  async function handleToggleHabit(habitId: number) {
-    const prevLog = habitLogs[habitId];
-    setHabitLogs((prev) => ({
-      ...prev,
-      [habitId]: { logId: prevLog?.logId ?? 0, isChecked: !(prevLog?.isChecked ?? false) },
-    }));
+  async function handleToggleLog(logId: number) {
+    const prevLog = dailyLogs.find((l) => l.logId === logId);
+    if (!prevLog) return;
+    setDailyLogs((prev) => prev.map((l) => l.logId === logId ? { ...l, isChecked: !l.isChecked } : l));
     try {
-      const res = await fetch(`${API}/logs/${habitId}/toggle`, { method: "POST" });
-      const updated: LogEntry = await res.json();
-      // logId のみサーバー値で更新（isChecked はオプティミスティック値を維持）
-      setHabitLogs((prev) => ({
-        ...prev,
-        [updated.habit_id]: { logId: updated.id, isChecked: prev[updated.habit_id]?.isChecked ?? updated.is_checked },
-      }));
+      await fetch(`${API}/logs/${logId}/toggle`, { method: "POST" });
     } catch {
-      setHabitLogs((prev) => {
-        if (prevLog !== undefined) return { ...prev, [habitId]: prevLog };
-        const next = { ...prev };
-        delete next[habitId];
-        return next;
-      });
+      setDailyLogs((prev) => prev.map((l) => l.logId === logId ? prevLog : l));
     }
   }
 
-  async function handleDeleteHabit(habitId: number) {
-    const prevHabits = habits;
-    setHabits((prev) => prev.filter((h) => h.id !== habitId));
+  async function handleDeleteLog(logId: number) {
+    const prevLogs = dailyLogs;
+    setDailyLogs((prev) => prev.filter((l) => l.logId !== logId));
     try {
-      await fetch(`${API}/habits/${habitId}`, { method: "DELETE" });
+      await fetch(`${API}/logs/${logId}`, { method: "DELETE" });
     } catch {
-      setHabits(prevHabits);
+      setDailyLogs(prevLogs);
     }
   }
 
-  function handleEditHabit(habitId: number, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
-    const prevHabit = habits.find((h) => h.id === habitId);
-    setHabits((prev) =>
-      prev.map((h) => (h.id === habitId ? { ...h, ...data } : h)).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time))
+  function handleEditLog(logId: number, habitId: number | null, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
+    const prevLog = dailyLogs.find((l) => l.logId === logId);
+    setDailyLogs((prev) =>
+      prev.map((l) => l.logId === logId ? { ...l, title: data.title, scheduledTime: data.scheduled_time, location: data.location } : l)
+        .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
     );
-    fetch(`${API}/habits/${habitId}`, {
+    const url = habitId != null ? `${API}/habits/${habitId}` : `${API}/logs/standalone/${logId}`;
+    fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     })
       .then((r) => r.json())
-      .then((updated: Habit) => {
-        setHabits((prev) => prev.map((h) => (h.id === habitId ? updated : h)).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
+      .then((updated: LogApiResponse) => {
+        setDailyLogs((prev) =>
+          prev.map((l) => l.logId === logId ? { ...l, title: updated.title, scheduledTime: updated.scheduled_time, location: updated.location } : l)
+            .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
+        );
       })
       .catch(() => {
-        if (prevHabit) setHabits((prev) => prev.map((h) => (h.id === habitId ? prevHabit : h)).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
+        if (prevLog) setDailyLogs((prev) => prev.map((l) => l.logId === logId ? prevLog : l).sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
       });
     return Promise.resolve();
   }
@@ -347,7 +344,7 @@ export default function Home() {
     <>
       {phase === "loading" && showAnimation && (
         <LoadingOverlay onComplete={() => {
-          localStorage.setItem("habit_app_launched", "true");
+          setSetting("habit_app_launched", "true");
           setAnimationDone(true);
         }} />
       )}
@@ -523,12 +520,11 @@ export default function Home() {
         </button>
 
         <HabitList
-          habits={habits}
-          habitLogs={habitLogs}
+          dailyLogs={dailyLogs}
           persistentTodos={persistentTodos}
-          onToggleHabit={handleToggleHabit}
-          onDeleteHabit={handleDeleteHabit}
-          onEditHabit={handleEditHabit}
+          onToggleLog={handleToggleLog}
+          onDeleteLog={handleDeleteLog}
+          onEditLog={handleEditLog}
           onTogglePersistent={handleTogglePersistent}
           onDeletePersistent={handleDeletePersistent}
           onEditPersistent={handleEditPersistent}

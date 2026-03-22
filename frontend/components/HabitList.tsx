@@ -1,14 +1,11 @@
 import TodoItem, { TodoEntry } from "./TodoItem";
 
-interface Habit {
-  id: number;
-  title: string;
-  scheduled_time: string;
-  location: string;
-}
-
-interface HabitLog {
+export interface DailyLogEntry {
   logId: number;
+  habitId: number | null;
+  title: string;
+  scheduledTime: string;
+  location: string;
   isChecked: boolean;
 }
 
@@ -21,43 +18,36 @@ interface PersistentTodo {
 }
 
 interface HabitListProps {
-  habits: Habit[];
-  habitLogs: Record<number, HabitLog>;
+  dailyLogs: DailyLogEntry[];
   persistentTodos: PersistentTodo[];
-  onToggleHabit: (habitId: number) => void;
-  onDeleteHabit: (habitId: number) => void;
-  onEditHabit: (habitId: number, data: { title: string; scheduled_time: string; location: string }) => Promise<void>;
+  onToggleLog: (logId: number) => void;
+  onDeleteLog: (logId: number) => void;
+  onEditLog: (logId: number, habitId: number | null, data: { title: string; scheduled_time: string; location: string }) => Promise<void>;
   onTogglePersistent: (id: number) => void;
   onDeletePersistent: (id: number) => void;
   onEditPersistent: (id: number, data: { title: string; scheduled_time: string; location: string }) => Promise<void>;
 }
 
 export default function HabitList({
-  habits,
-  habitLogs,
+  dailyLogs,
   persistentTodos,
-  onToggleHabit,
-  onDeleteHabit,
-  onEditHabit,
+  onToggleLog,
+  onDeleteLog,
+  onEditLog,
   onTogglePersistent,
   onDeletePersistent,
   onEditPersistent,
 }: HabitListProps) {
-  // Build unified sorted list
   type UnifiedItem =
-    | { kind: "habit"; habit: Habit; log: HabitLog }
+    | { kind: "log"; log: DailyLogEntry }
     | { kind: "persistent"; todo: PersistentTodo };
 
   const items: UnifiedItem[] = [
-    ...habits.map((h) => ({
-      kind: "habit" as const,
-      habit: h,
-      log: habitLogs[h.id] ?? { logId: 0, isChecked: false },
-    })),
+    ...dailyLogs.map((log) => ({ kind: "log" as const, log })),
     ...persistentTodos.map((t) => ({ kind: "persistent" as const, todo: t })),
   ].sort((a, b) => {
-    const timeA = a.kind === "habit" ? a.habit.scheduled_time : (a.todo.scheduled_time ?? "99:99");
-    const timeB = b.kind === "habit" ? b.habit.scheduled_time : (b.todo.scheduled_time ?? "99:99");
+    const timeA = a.kind === "log" ? a.log.scheduledTime : (a.todo.scheduled_time ?? "99:99");
+    const timeB = b.kind === "log" ? b.log.scheduledTime : (b.todo.scheduled_time ?? "99:99");
     return timeA.localeCompare(timeB);
   });
 
@@ -70,7 +60,7 @@ export default function HabitList({
   }
 
   const doneCount = items.filter((item) =>
-    item.kind === "habit" ? item.log.isChecked : item.todo.is_completed
+    item.kind === "log" ? item.log.isChecked : item.todo.is_completed
   ).length;
 
   return (
@@ -80,41 +70,43 @@ export default function HabitList({
       </p>
       <ul className="flex flex-col gap-2">
         {items.map((item) => {
-          if (item.kind === "habit") {
+          if (item.kind === "log") {
+            const { log } = item;
             const entry: TodoEntry = {
               kind: "habit",
-              id: item.habit.id,
-              logId: item.log.logId,
-              title: item.habit.title,
-              scheduledTime: item.habit.scheduled_time,
-              location: item.habit.location,
-              isChecked: item.log.isChecked,
+              logId: log.logId,
+              habitId: log.habitId,
+              title: log.title,
+              scheduledTime: log.scheduledTime,
+              location: log.location,
+              isChecked: log.isChecked,
             };
             return (
               <TodoItem
-                key={`habit-${item.habit.id}`}
+                key={`log-${log.logId}`}
                 item={entry}
-                onToggle={() => onToggleHabit(item.habit.id)}
-                onDelete={() => onDeleteHabit(item.habit.id)}
-                onEdit={(data) => onEditHabit(item.habit.id, data)}
+                onToggle={() => onToggleLog(log.logId)}
+                onDelete={() => onDeleteLog(log.logId)}
+                onEdit={(data) => onEditLog(log.logId, log.habitId, data)}
               />
             );
           } else {
+            const { todo } = item;
             const entry: TodoEntry = {
               kind: "persistent",
-              id: item.todo.id,
-              title: item.todo.title,
-              scheduledTime: item.todo.scheduled_time,
-              location: item.todo.location,
-              isCompleted: item.todo.is_completed,
+              id: todo.id,
+              title: todo.title,
+              scheduledTime: todo.scheduled_time,
+              location: todo.location,
+              isCompleted: todo.is_completed,
             };
             return (
               <TodoItem
-                key={`persistent-${item.todo.id}`}
+                key={`persistent-${todo.id}`}
                 item={entry}
-                onToggle={() => onTogglePersistent(item.todo.id)}
-                onDelete={() => onDeletePersistent(item.todo.id)}
-                onEdit={(data) => onEditPersistent(item.todo.id, data)}
+                onToggle={() => onTogglePersistent(todo.id)}
+                onDelete={() => onDeletePersistent(todo.id)}
+                onEdit={(data) => onEditPersistent(todo.id, data)}
               />
             );
           }

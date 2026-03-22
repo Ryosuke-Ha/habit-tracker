@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSetting } from "@/hooks/useSetting";
 
 interface Template {
   id: number;
@@ -26,6 +27,7 @@ export default function TemplateSelectorModal({
   title = "今日はどっち？",
 }: Props) {
   const router = useRouter();
+  const { setSetting } = useSetting();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [error, setError] = useState("");
 
@@ -51,8 +53,8 @@ export default function TemplateSelectorModal({
     }
     // ナビゲーションモード: 日付 + テンプレートIDを保存してから遷移
     const today = new Date().toISOString().split("T")[0];
-    localStorage.setItem("habit_last_visit_date", today);
-    localStorage.setItem("habit_last_template_id", String(templateId));
+    setSetting("habit_last_visit_date", today);
+    setSetting("habit_last_template_id", String(templateId));
     router.push(`/habits?template_id=${templateId}`);
     onClose();
   }

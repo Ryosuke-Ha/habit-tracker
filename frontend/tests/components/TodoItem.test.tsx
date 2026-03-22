@@ -8,8 +8,8 @@ global.fetch = jest.fn(() =>
 
 const habitItem: HabitEntry = {
   kind: "habit",
-  id: 1,
   logId: 10,
+  habitId: 1,
   title: "朝の筋トレ",
   scheduledTime: "07:00",
   location: "ジム",

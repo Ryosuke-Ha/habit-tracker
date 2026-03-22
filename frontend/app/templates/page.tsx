@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSetting } from "@/hooks/useSetting";
 
 interface Template { id: number; name: string; }
 interface Habit { id: number; template_id: number; title: string; scheduled_time: string; location: string; order: number; }
@@ -23,6 +24,7 @@ const TIME_OPTIONS = generateTimeOptions();
 
 export default function TemplatesPage() {
   const router = useRouter();
+  const { getSetting, setSetting } = useSetting();
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [error, setError] = useState("");
@@ -55,29 +57,34 @@ export default function TemplatesPage() {
   useEffect(() => { if (addingNew) newInputRef.current?.focus(); }, [addingNew]);
 
   useEffect(() => {
-    const stored = localStorage.getItem("habit_day_template_map");
-    if (stored) {
-      try { setDayMap(JSON.parse(stored)); } catch { /* ignore */ }
-    }
+    getSetting("habit_day_template_map").then((stored) => {
+      if (stored) {
+        try { setDayMap(JSON.parse(stored)); } catch { /* ignore */ }
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (templates.length === 0) return;
-    if (localStorage.getItem("habit_day_template_map")) return;
-    const heijitsu = templates.find((t) => t.name === "平日");
-    const kyujitsu = templates.find((t) => t.name === "休日");
-    if (!heijitsu || !kyujitsu) return;
-    const defaults: Record<string, string> = {
-      "0": String(kyujitsu.id),
-      "1": String(heijitsu.id),
-      "2": String(heijitsu.id),
-      "3": String(heijitsu.id),
-      "4": String(heijitsu.id),
-      "5": String(heijitsu.id),
-      "6": String(kyujitsu.id),
-    };
-    setDayMap(defaults);
-    localStorage.setItem("habit_day_template_map", JSON.stringify(defaults));
+    getSetting("habit_day_template_map").then((existing) => {
+      if (existing) return;
+      const heijitsu = templates.find((t) => t.name === "平日");
+      const kyujitsu = templates.find((t) => t.name === "休日");
+      if (!heijitsu || !kyujitsu) return;
+      const defaults: Record<string, string> = {
+        "0": String(kyujitsu.id),
+        "1": String(heijitsu.id),
+        "2": String(heijitsu.id),
+        "3": String(heijitsu.id),
+        "4": String(heijitsu.id),
+        "5": String(heijitsu.id),
+        "6": String(kyujitsu.id),
+      };
+      setDayMap(defaults);
+      setSetting("habit_day_template_map", JSON.stringify(defaults));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templates]);
 
   async function fetchTemplates() {
@@ -193,7 +200,7 @@ export default function TemplatesPage() {
   function handleDayMapChange(day: string, templateId: string) {
     const newMap = { ...dayMap, [day]: templateId };
     setDayMap(newMap);
-    localStorage.setItem("habit_day_template_map", JSON.stringify(newMap));
+    setSetting("habit_day_template_map", JSON.stringify(newMap));
   }
 
   return (

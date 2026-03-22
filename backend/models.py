@@ -36,16 +36,22 @@ class Habit(Base):
     order = Column(Integer, default=0)
 
     template = relationship("Template", back_populates="habits")
-    logs = relationship("DailyLog", back_populates="habit", cascade="all, delete-orphan")
+    # Do NOT cascade-delete DailyLogs; detach them manually on Habit deletion
+    logs = relationship("DailyLog", back_populates="habit", cascade="save-update, merge")
 
 
 class DailyLog(Base):
     __tablename__ = "daily_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    habit_id = Column(Integer, ForeignKey("habits.id"), nullable=False)
+    habit_id = Column(Integer, ForeignKey("habits.id"), nullable=True)  # nullable: standalone logs have no habit
     date = Column(Date, nullable=False)
     is_checked = Column(Boolean, default=False)
+    # Standalone (one-off) fields — populated when habit_id is None
+    title = Column(String, nullable=True)
+    scheduled_time = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)  # for filtering standalone logs
 
     habit = relationship("Habit", back_populates="logs")
 
@@ -96,6 +102,16 @@ class SubTask(Base):
     is_completed = Column(Boolean, default=False)
     order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    key = Column(String, nullable=False)
+    value = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class KPTItem(Base):

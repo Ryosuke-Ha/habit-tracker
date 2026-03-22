@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 backend/venv/
 slack-bot/venv/
+backend/alembic/versions/
 
 # Next.js
 frontend/.next/
