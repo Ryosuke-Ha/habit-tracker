@@ -22,9 +22,6 @@ export default function LoginPage() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-[80vh] text-center">
-      <p className="text-xs tracking-[0.3em] text-gray-400 uppercase mb-4">
-        Atomic Habits
-      </p>
       <h1 className="text-3xl font-bold text-gray-900 mb-2">習慣トラッカー</h1>
       <p className="text-gray-400 text-sm mb-12">1%の改善を毎日続けよう</p>
 
