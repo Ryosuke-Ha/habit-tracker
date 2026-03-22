@@ -130,17 +130,25 @@ export default function WeeklyReviewPage() {
   async function handleAdd() {
     if (!addingType || !newContent.trim() || !review) return;
     const email = session!.user!.email!;
-    const res = await fetch(`${API}/reviews/weekly/${review.id}/kpt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-User-Email": email },
-      body: JSON.stringify({ type: addingType, content: newContent.trim() }),
-    });
-    const item: KPTItem = await res.json();
-    setReview((prev) =>
-      prev ? { ...prev, kpt_items: [...prev.kpt_items, item] } : prev
-    );
+    const type = addingType;
+    const content = newContent.trim();
+    const reviewId = review.id;
+    const tempId = -Date.now();
+    const tempItem: KPTItem = { id: tempId, review_id: reviewId, type, content, is_completed: false, created_at: new Date().toISOString() };
+    setReview((prev) => prev ? { ...prev, kpt_items: [...prev.kpt_items, tempItem] } : prev);
     setNewContent("");
     setAddingType(null);
+    try {
+      const res = await fetch(`${API}/reviews/weekly/${reviewId}/kpt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        body: JSON.stringify({ type, content }),
+      });
+      const item: KPTItem = await res.json();
+      setReview((prev) => prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === tempId ? item : i)) } : prev);
+    } catch {
+      setReview((prev) => prev ? { ...prev, kpt_items: prev.kpt_items.filter((i) => i.id !== tempId) } : prev);
+    }
   }
 
   async function handleToggleComplete(item: KPTItem) {
@@ -309,9 +317,9 @@ export default function WeeklyReviewPage() {
 
             {/* アイテム一覧 */}
             {items.length > 0 && (
-              <ul className="px-4 pb-3 space-y-2">
+              <ul className="px-4 pb-3">
                 {items.map((item) => (
-                  <li key={item.id} className="flex items-start gap-2 group">
+                  <li key={item.id} className="flex items-start gap-2 group mb-2">
                     {/* チェックボタン（Tryのみ） */}
                     {type === "try" && (
                       <button
@@ -341,6 +349,7 @@ export default function WeeklyReviewPage() {
                             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSave(item.id); }
                             if (e.key === "Escape") setEditingId(null);
                           }}
+                          onBlur={() => window.scrollTo(0, 0)}
                           className="flex-1 text-sm border border-gray-300 rounded-lg px-2 py-1 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
                           rows={2}
                         />
@@ -365,7 +374,7 @@ export default function WeeklyReviewPage() {
                           item.is_completed ? "line-through text-gray-400" : "text-gray-800"
                         }`}
                       >
-                        {item.content}
+                        ・{item.content}
                       </span>
                     )}
 
@@ -406,6 +415,7 @@ export default function WeeklyReviewPage() {
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAdd(); }
                     if (e.key === "Escape") { setAddingType(null); setNewContent(""); }
                   }}
+                  onBlur={() => window.scrollTo(0, 0)}
                   placeholder={`${cfg.label}を入力…`}
                   className="w-full text-sm border border-gray-300 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
                   rows={2}

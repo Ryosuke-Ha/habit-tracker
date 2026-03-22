@@ -70,7 +70,6 @@ export default function Home() {
   const [modalTitle, setModalTitle] = useState("");
   const [modalTime, setModalTime] = useState("07:00");
   const [modalLocation, setModalLocation] = useState("");
-  const [modalLoading, setModalLoading] = useState(false);
   const [isPersistentModal, setIsPersistentModal] = useState(false);
 
   const weekdayLabel = WEEKDAY_LABELS[new Date().getDay()];
@@ -177,37 +176,50 @@ export default function Home() {
   async function handleModalAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!modalTitle.trim()) return;
-    setModalLoading(true);
     const email = session?.user?.email;
-    try {
-      if (isPersistentModal) {
-        if (!email) return;
+    const title = modalTitle.trim();
+    const time = modalTime;
+    const location = modalLocation.trim();
+
+    if (isPersistentModal) {
+      if (!email) return;
+      const tempId = -Date.now();
+      const tempTodo: PersistentTodo = { id: tempId, title, scheduled_time: time || null, location: location || null, is_completed: false, completed_at: null };
+      setPersistentTodos((prev) => [...prev, tempTodo]);
+      closeModal();
+      try {
         const res = await fetch(`${API}/persistent-todos`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-User-Email": email },
-          body: JSON.stringify({ title: modalTitle.trim(), scheduled_time: modalTime || null, location: modalLocation.trim() }),
+          body: JSON.stringify({ title, scheduled_time: time || null, location }),
         });
         const newTodo: PersistentTodo = await res.json();
-        setPersistentTodos((prev) => [...prev, newTodo]);
-      } else {
-        if (!templateId) return;
+        setPersistentTodos((prev) => prev.map((t) => (t.id === tempId ? newTodo : t)));
+      } catch {
+        setPersistentTodos((prev) => prev.filter((t) => t.id !== tempId));
+      }
+    } else {
+      if (!templateId) return;
+      const tempId = -Date.now();
+      const tempHabit: Habit = { id: tempId, template_id: templateId, title, scheduled_time: time, location, order: 0 };
+      setHabits((prev) => [...prev, tempHabit].sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
+      closeModal();
+      try {
         const res = await fetch(`${API}/habits`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: modalTitle.trim(), scheduled_time: modalTime, location: modalLocation.trim(), template_id: templateId }),
+          body: JSON.stringify({ title, scheduled_time: time, location, template_id: templateId }),
         });
         const newHabit: Habit = await res.json();
-        // Also create a log entry for today
         const logRes = await fetch(`${API}/logs/today?template_id=${templateId}`);
         const logsData: LogEntry[] = await logRes.json();
-        setHabits((prev) => [...prev, newHabit].sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
+        setHabits((prev) => prev.map((h) => (h.id === tempId ? newHabit : h)).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)));
         const logMap: Record<number, { logId: number; isChecked: boolean }> = {};
         logsData.forEach((l) => { logMap[l.habit_id] = { logId: l.id, isChecked: l.is_checked }; });
         setHabitLogs(logMap);
+      } catch {
+        setHabits((prev) => prev.filter((h) => h.id !== tempId));
       }
-      closeModal();
-    } finally {
-      setModalLoading(false);
     }
   }
 
@@ -349,10 +361,10 @@ export default function Home() {
               <div className="flex gap-2 mt-1">
                 <button
                   type="submit"
-                  disabled={modalLoading || !modalTitle.trim()}
+                  disabled={!modalTitle.trim()}
                   className={`flex-1 py-2 text-white text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isPersistentModal ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"}`}
                 >
-                  {modalLoading ? "追加中…" : isPersistentModal ? "持ち越しとして追加" : "追加する"}
+                  {isPersistentModal ? "持ち越しとして追加" : "追加する"}
                 </button>
                 <button
                   type="button"

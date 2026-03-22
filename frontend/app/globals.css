@@ -78,3 +78,8 @@
   left: 50%;
   animation: burstParticle 0.5s ease-out forwards;
 }
+
+/* iOSの自動ズーム防止: font-size 16px未満だとズームが発生するため */
+input, select, textarea {
+  font-size: 16px !important;
+}
