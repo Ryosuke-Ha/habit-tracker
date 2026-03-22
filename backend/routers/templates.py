@@ -68,11 +68,16 @@ def update_template(template_id: int, body: TemplateUpdate, db: Session = Depend
     return template
 
 
+PROTECTED_TEMPLATE_NAMES = {"平日", "休日"}
+
+
 @router.delete("/templates/{template_id}")
 def delete_template(template_id: int, db: Session = Depends(get_db)):
     template = db.query(models.Template).filter(models.Template.id == template_id).first()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
+    if template.name in PROTECTED_TEMPLATE_NAMES:
+        raise HTTPException(status_code=403, detail=f"Template '{template.name}' cannot be deleted")
     db.delete(template)
     db.commit()
     return {"ok": True}

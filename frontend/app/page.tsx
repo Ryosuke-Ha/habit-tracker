@@ -34,11 +34,6 @@ interface PersistentTodo {
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const WEEKDAY_LABELS = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
 
-function getTemplateNameForToday(): string {
-  const day = new Date().getDay();
-  return day === 0 || day === 6 ? "休日" : "平日";
-}
-
 function generateTimeOptions(): string[] {
   const times: string[] = [];
   for (let h = 0; h < 24; h++) {
@@ -58,8 +53,10 @@ export default function Home() {
   const [phase, setPhase] = useState<Phase>("initial");
   const [animationDone, setAnimationDone] = useState(false);
   const [dataReady, setDataReady] = useState(false);
+  const [showAnimation, setShowAnimation] = useState(false);
 
   const [templateId, setTemplateId] = useState<number | null>(null);
+  const [templateName, setTemplateName] = useState<string>("");
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitLogs, setHabitLogs] = useState<Record<number, { logId: number; isChecked: boolean }>>({});
   const [persistentTodos, setPersistentTodos] = useState<PersistentTodo[]>([]);
@@ -77,11 +74,17 @@ export default function Home() {
   const [isPersistentModal, setIsPersistentModal] = useState(false);
 
   const weekdayLabel = WEEKDAY_LABELS[new Date().getDay()];
-  const templateName = getTemplateNameForToday();
 
   useEffect(() => {
     if (status === "loading") return;
     if (status === "unauthenticated") { router.replace("/login"); return; }
+    const alreadyLaunched = localStorage.getItem("habit_app_launched");
+    if (alreadyLaunched) {
+      setAnimationDone(true);
+      setShowAnimation(false);
+    } else {
+      setShowAnimation(true);
+    }
     setPhase("loading");
     fetchData();
   }, [status, router]);
@@ -103,10 +106,25 @@ export default function Home() {
     try {
       const templatesRes = await fetch(`${API}/templates`);
       const templates: Template[] = await templatesRes.json();
-      const matched = templates.find((t) => t.name === templateName) ?? templates[0];
+
+      let matched: Template | undefined;
+      const storedMap = localStorage.getItem("habit_day_template_map");
+      if (storedMap) {
+        try {
+          const map: Record<string, string> = JSON.parse(storedMap);
+          const dayKey = String(new Date().getDay());
+          const idStr = map[dayKey];
+          if (idStr) matched = templates.find((t) => t.id === parseInt(idStr));
+        } catch { /* ignore */ }
+      }
+      if (!matched) {
+        const fallback = new Date().getDay() === 0 || new Date().getDay() === 6 ? "休日" : "平日";
+        matched = templates.find((t) => t.name === fallback) ?? templates[0];
+      }
       if (!matched) { setDataReady(true); return; }
 
       setTemplateId(matched.id);
+      setTemplateName(matched.name);
 
       const [habitsRes, logsRes, tryRes, goalRes, persistentRes] = await Promise.all([
         fetch(`${API}/templates/${matched.id}/habits`),
@@ -260,7 +278,12 @@ export default function Home() {
 
   return (
     <>
-      {phase === "loading" && <LoadingOverlay onComplete={() => setAnimationDone(true)} />}
+      {phase === "loading" && showAnimation && (
+        <LoadingOverlay onComplete={() => {
+          localStorage.setItem("habit_app_launched", "true");
+          setAnimationDone(true);
+        }} />
+      )}
 
       {/* Add TODO modal */}
       {addModalOpen && (
