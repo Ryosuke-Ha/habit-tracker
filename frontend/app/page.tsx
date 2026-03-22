@@ -230,13 +230,11 @@ export default function Home() {
     if (!prevItem) return;
     setTryItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, is_completed: !i.is_completed } : i)));
     try {
-      const res = await fetch(`${API}/reviews/kpt/${itemId}`, {
+      await fetch(`${API}/reviews/kpt/${itemId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-User-Email": email },
         body: JSON.stringify({ is_completed: !prevItem.is_completed }),
       });
-      const updated: TryItem = await res.json();
-      setTryItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
     } catch {
       setTryItems((prev) => prev.map((i) => (i.id === itemId ? prevItem : i)));
     }
@@ -251,7 +249,11 @@ export default function Home() {
     try {
       const res = await fetch(`${API}/logs/${habitId}/toggle`, { method: "POST" });
       const updated: LogEntry = await res.json();
-      setHabitLogs((prev) => ({ ...prev, [updated.habit_id]: { logId: updated.id, isChecked: updated.is_checked } }));
+      // logId のみサーバー値で更新（isChecked はオプティミスティック値を維持）
+      setHabitLogs((prev) => ({
+        ...prev,
+        [updated.habit_id]: { logId: updated.id, isChecked: prev[updated.habit_id]?.isChecked ?? updated.is_checked },
+      }));
     } catch {
       setHabitLogs((prev) => {
         if (prevLog !== undefined) return { ...prev, [habitId]: prevLog };
@@ -298,12 +300,10 @@ export default function Home() {
     const prevTodo = persistentTodos.find((t) => t.id === id);
     setPersistentTodos((prev) => prev.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t)));
     try {
-      const res = await fetch(`${API}/persistent-todos/${id}/complete`, {
+      await fetch(`${API}/persistent-todos/${id}/complete`, {
         method: "POST",
         headers: { "X-User-Email": email },
       });
-      const updated: PersistentTodo = await res.json();
-      setPersistentTodos((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     } catch {
       if (prevTodo) setPersistentTodos((prev) => prev.map((t) => (t.id === id ? prevTodo : t)));
     }

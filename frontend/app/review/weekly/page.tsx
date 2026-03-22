@@ -157,15 +157,11 @@ export default function WeeklyReviewPage() {
       prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === item.id ? { ...i, is_completed: !i.is_completed } : i)) } : prev
     );
     try {
-      const res = await fetch(`${API}/reviews/kpt/${item.id}`, {
+      await fetch(`${API}/reviews/kpt/${item.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-User-Email": email },
         body: JSON.stringify({ is_completed: !item.is_completed }),
       });
-      const updated: KPTItem = await res.json();
-      setReview((prev) =>
-        prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === updated.id ? updated : i)) } : prev
-      );
     } catch {
       setReview((prev) =>
         prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === item.id ? item : i)) } : prev
