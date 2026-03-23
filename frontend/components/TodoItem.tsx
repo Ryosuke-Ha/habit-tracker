@@ -398,17 +398,27 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
                   </div>
                 </>
               )}
-              {/* Add subtask input */}
-              <div className={totalCount > 0 ? "" : "mt-3"}>
+              {/* Add subtask input + button */}
+              <div className={`flex items-center gap-2 ${totalCount > 0 ? "" : "mt-3"}`}>
                 <input
                   type="text"
                   value={newSubtaskTitle}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => setNewSubtaskTitle(e.target.value)}
                   onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); } }}
-                  placeholder="＋ サブタスクを追加 (Enter)"
-                  className="w-full text-xs border-b border-gray-200 py-1.5 focus:outline-none focus:border-indigo-400 bg-transparent text-gray-700 placeholder-gray-300"
+                  placeholder="サブタスクを追加"
+                  className="flex-1 text-xs border-b border-gray-200 py-1.5 focus:outline-none focus:border-indigo-400 bg-transparent text-gray-700 placeholder-gray-300"
                 />
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleAddSubtask(); }}
+                  disabled={!newSubtaskTitle.trim()}
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  aria-label="サブタスクを追加"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
               </div>
             </>
           ) : (
