@@ -1,4 +1,5 @@
 import datetime
+from datetime import timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +10,13 @@ import models
 from database import get_db
 
 router = APIRouter()
+
+JST = timezone(timedelta(hours=9))
+
+
+def _today_jst() -> datetime.date:
+    """Return today's date in JST (UTC+9)."""
+    return datetime.datetime.now(JST).date()
 
 
 class HabitCreate(BaseModel):
@@ -142,7 +150,7 @@ def delete_habit(habit_id: int, db: Session = Depends(get_db)):
 
 @router.get("/logs/today", response_model=list[LogResponse])
 def get_today_logs(template_id: int, db: Session = Depends(get_db)):
-    today = datetime.date.today()
+    today = _today_jst()
     habits = (
         db.query(models.Habit)
         .filter(models.Habit.template_id == template_id)
@@ -190,7 +198,7 @@ def get_today_logs(template_id: int, db: Session = Depends(get_db)):
 
 @router.post("/logs/standalone", response_model=LogResponse)
 def create_standalone_log(body: StandaloneLogCreate, db: Session = Depends(get_db)):
-    today = datetime.date.today()
+    today = _today_jst()
     log = models.DailyLog(
         habit_id=None,
         date=today,

@@ -58,7 +58,10 @@ def list_persistent_todos(
 ):
     return (
         db.query(models.PersistentTodo)
-        .filter_by(user_id=user_email)
+        .filter(
+            models.PersistentTodo.user_id == user_email,
+            models.PersistentTodo.is_completed == False,  # noqa: E712
+        )
         .order_by(models.PersistentTodo.created_at)
         .all()
     )
