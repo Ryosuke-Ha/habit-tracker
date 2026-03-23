@@ -75,6 +75,7 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
   const [subtasks, setSubtasks] = useState<SubTask[]>([]);
   const [subtasksLoaded, setSubtasksLoaded] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- 完了アニメーション用 state ---
   // "idle" | "completing" | "done"
@@ -124,15 +125,26 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
   }, [expanded]);
 
   async function handleAddSubtask() {
-    if (!newSubtaskTitle.trim()) return;
-    const res = await fetch(`${API}/subtasks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ todo_type: subtaskType, todo_id: subtaskTodoId, title: newSubtaskTitle.trim() }),
-    });
-    const created: SubTask = await res.json();
-    setSubtasks((prev) => [...prev, created]);
+    if (!newSubtaskTitle.trim() || isSubmitting) return;
+    const title = newSubtaskTitle.trim();
+    const tempId = -Date.now();
+    const tempSubtask: SubTask = { id: tempId, title, is_completed: false, order: subtasks.length };
+    setSubtasks((prev) => [...prev, tempSubtask]);
     setNewSubtaskTitle("");
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API}/subtasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ todo_type: subtaskType, todo_id: subtaskTodoId, title }),
+      });
+      const created: SubTask = await res.json();
+      setSubtasks((prev) => prev.map((s) => (s.id === tempId ? created : s)));
+    } catch {
+      setSubtasks((prev) => prev.filter((s) => s.id !== tempId));
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   async function handleToggleSubtask(id: number) {
@@ -411,7 +423,7 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
                 />
                 <button
                   onClick={(e) => { e.stopPropagation(); handleAddSubtask(); }}
-                  disabled={!newSubtaskTitle.trim()}
+                  disabled={!newSubtaskTitle.trim() || isSubmitting}
                   className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   aria-label="サブタスクを追加"
                 >

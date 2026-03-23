@@ -72,6 +72,7 @@ export default function Home() {
   const [modalTime, setModalTime] = useState("07:00");
   const [modalLocation, setModalLocation] = useState("");
   const [isPersistentModal, setIsPersistentModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const weekdayLabel = WEEKDAY_LABELS[new Date().getDay()];
 
@@ -182,14 +183,15 @@ export default function Home() {
 
   async function handleModalAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!modalTitle.trim()) return;
+    if (!modalTitle.trim() || isSubmitting) return;
     const email = session?.user?.email;
     const title = modalTitle.trim();
     const time = modalTime;
     const location = modalLocation.trim();
 
+    setIsSubmitting(true);
     if (isPersistentModal) {
-      if (!email) return;
+      if (!email) { setIsSubmitting(false); return; }
       const tempId = -Date.now();
       const tempTodo: PersistentTodo = { id: tempId, title, scheduled_time: time || null, location: location || null, is_completed: false, completed_at: null };
       setPersistentTodos((prev) => [...prev, tempTodo]);
@@ -204,9 +206,11 @@ export default function Home() {
         setPersistentTodos((prev) => prev.map((t) => (t.id === tempId ? newTodo : t)));
       } catch {
         setPersistentTodos((prev) => prev.filter((t) => t.id !== tempId));
+      } finally {
+        setIsSubmitting(false);
       }
     } else {
-      if (!templateId) return;
+      if (!templateId) { setIsSubmitting(false); return; }
       const tempLogId = -Date.now();
       const tempLog: DailyLogEntry = { logId: tempLogId, habitId: null, title, scheduledTime: time, location, isChecked: false };
       setDailyLogs((prev) => [...prev, tempLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
@@ -224,6 +228,8 @@ export default function Home() {
         );
       } catch {
         setDailyLogs((prev) => prev.filter((l) => l.logId !== tempLogId));
+      } finally {
+        setIsSubmitting(false);
       }
     }
   }
@@ -413,7 +419,7 @@ export default function Home() {
               <div className="flex gap-2 mt-1">
                 <button
                   type="submit"
-                  disabled={!modalTitle.trim()}
+                  disabled={!modalTitle.trim() || isSubmitting}
                   className={`flex-1 py-2 text-white text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isPersistentModal ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"}`}
                 >
                   {isPersistentModal ? "持ち越しとして追加" : "追加する"}
