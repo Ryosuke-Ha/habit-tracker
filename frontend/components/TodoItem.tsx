@@ -148,9 +148,14 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
   }
 
   async function handleToggleSubtask(id: number) {
-    const res = await fetch(`${API}/subtasks/${id}/toggle`, { method: "POST" });
-    const updated: SubTask = await res.json();
-    setSubtasks((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    const prev = subtasks.find((s) => s.id === id);
+    if (!prev) return;
+    setSubtasks((list) => list.map((s) => (s.id === id ? { ...s, is_completed: !s.is_completed } : s)));
+    try {
+      await fetch(`${API}/subtasks/${id}/toggle`, { method: "POST" });
+    } catch {
+      setSubtasks((list) => list.map((s) => (s.id === id ? prev : s)));
+    }
   }
 
   async function handleDeleteSubtask(id: number) {
