@@ -12,12 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Dedicated "+" button next to the subtask input field for adding subtasks (in addition to the existing Enter key method)
+- Optimistic UI for subtask creation — subtask appears instantly and is reconciled after the server responds
+- Optimistic UI for adding new habits/persistent TODOs via the modal — items appear instantly before server confirmation
+- Double-submit prevention on the add-item modal and subtask add button
 
 ### Changed
 
 - Subtask input area now uses a flex layout with the text input and add button side by side
 - Subtask input placeholder simplified from "＋ サブタスクを追加 (Enter)" to "サブタスクを追加"
-- Add subtask button is disabled when the input field is empty
+- Add subtask button is disabled when the input field is empty or a submission is in progress
+- Add-item modal submit button is disabled while a submission is in progress
 
 ### Fixed
 
