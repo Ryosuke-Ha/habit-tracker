@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `GET /logs/today` and `POST /logs/standalone` now determine "today" using JST (UTC+9) instead of the server's local date
+- `GET /persistent-todos` now returns only incomplete (`is_completed = false`) persistent todos instead of all todos for the user
 - Subtask input area now uses a flex layout with the text input and add button side by side
 - Subtask input placeholder simplified from "＋ サブタスクを追加 (Enter)" to "サブタスクを追加"
 - Add subtask button is disabled when the input field is empty or a submission is in progress
