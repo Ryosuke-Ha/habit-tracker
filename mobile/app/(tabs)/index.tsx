@@ -18,6 +18,15 @@ import API_URL from '@/constants/api';
 
 // ─── 型定義 ────────────────────────────────────────────────────────────────────
 
+interface KPTItem {
+  id: number;
+  review_id: number;
+  type: string;
+  content: string;
+  is_completed: boolean;
+  created_at: string;
+}
+
 interface Template {
   id: number;
   name: string;
@@ -80,6 +89,7 @@ export default function TodayScreen() {
   const [todos, setTodos] = useState<HabitItemData[]>([]);
   const [templateName, setTemplateName] = useState('');
   const [templateId, setTemplateId] = useState<number | null>(null);
+  const [prevTryItems, setPrevTryItems] = useState<KPTItem[]>([]);
 
   // ─── データ取得 ───────────────────────────────────────────────────────────────
 
@@ -161,6 +171,39 @@ export default function TodayScreen() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // 前週のTryアイテム取得
+  useEffect(() => {
+    if (!user?.email) return;
+    fetch(`${API_URL}/reviews/weekly/current/try-items`, {
+      headers: { 'X-User-Email': user.email },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: KPTItem[]) => setPrevTryItems(data))
+      .catch(() => setPrevTryItems([]));
+  }, [user?.email]);
+
+  // 前週のTry完了トグル
+  async function handleToggleTryItem(item: KPTItem) {
+    setPrevTryItems((prev) =>
+      prev.map((it) => (it.id === item.id ? { ...it, is_completed: !it.is_completed } : it))
+    );
+    try {
+      const res = await fetch(`${API_URL}/reviews/kpt/${item.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Email': user?.email ?? '',
+        },
+        body: JSON.stringify({ is_completed: !item.is_completed }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setPrevTryItems((prev) =>
+        prev.map((it) => (it.id === item.id ? item : it))
+      );
+    }
+  }
 
   // ─── チェック切り替え（オプティミスティックUI）──────────────────────────────────
 
@@ -347,6 +390,28 @@ export default function TodayScreen() {
         renderItem={({ item }) => (
             <HabitItem item={item} onToggle={handleToggle} userEmail={user?.email ?? ''} />
           )}
+        ListHeaderComponent={
+          prevTryItems.length > 0 ? (
+            <View style={styles.prevTrySection}>
+              <Text style={styles.prevTrySectionTitle}>前週のTry</Text>
+              {prevTryItems.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.prevTryRow}
+                  onPress={() => handleToggleTryItem(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.prevTryCheckbox, item.is_completed && styles.prevTryCheckboxDone]}>
+                    {item.is_completed && <Text style={styles.prevTryCheckmark}>✓</Text>}
+                  </View>
+                  <Text style={[styles.prevTryContent, item.is_completed && styles.prevTryContentDone]}>
+                    {item.content}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null
+        }
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshControl={
@@ -473,6 +538,57 @@ const styles = StyleSheet.create({
     color: '#555555',
     marginTop: 60,
     fontSize: 16,
+  },
+  // 前週のTryセクション
+  prevTrySection: {
+    backgroundColor: '#1c1508',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#78350f',
+    padding: 14,
+    marginBottom: 8,
+    gap: 8,
+  },
+  prevTrySectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#d97706',
+    marginBottom: 2,
+  },
+  prevTryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 3,
+  },
+  prevTryCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#d97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  prevTryCheckboxDone: {
+    backgroundColor: '#d97706',
+    borderColor: '#d97706',
+  },
+  prevTryCheckmark: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 15,
+  },
+  prevTryContent: {
+    flex: 1,
+    fontSize: 15,
+    color: '#fcd34d',
+  },
+  prevTryContentDone: {
+    color: '#78350f',
+    textDecorationLine: 'line-through',
   },
   // フローティングボタン
   fab: {

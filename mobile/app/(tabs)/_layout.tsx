@@ -33,6 +33,15 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="weekly"
+        options={{
+          title: '週次',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon name="calendar-outline" color={color} size={size} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
