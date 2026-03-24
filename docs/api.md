@@ -308,7 +308,7 @@ Deletes a habit. Existing daily logs for this habit are detached (their `habit_i
 #### `GET /logs/today`
 > **No auth required**
 
-Returns today's daily log entries for a given template. Creates missing log entries on the fly (one per habit in the template).
+Returns today's daily log entries for a given template. Creates missing log entries on the fly (one per habit in the template). "Today" is determined using **JST (UTC+9)**.
 
 **Query Parameters**
 | Name | Type | Required | Description |
@@ -376,7 +376,7 @@ Toggles the `is_checked` state of a daily log entry.
 #### `POST /logs/standalone`
 > **No auth required**
 
-Creates a one-off daily log entry for today that is not linked to any habit.
+Creates a one-off daily log entry for today that is not linked to any habit. "Today" is determined using **JST (UTC+9)**.
 
 **Request Body**
 ```json
@@ -470,7 +470,7 @@ All persistent todo endpoints require `X-User-Email`.
 
 #### `GET /persistent-todos`
 
-Returns all persistent todos for the authenticated user, ordered by creation time.
+Returns all **incomplete** persistent todos for the authenticated user, ordered by creation time. Completed todos are excluded from the response.
 
 **Response `200`**
 ```json
@@ -980,7 +980,7 @@ Returns achievement statistics for the given month.
 ```
 
 | Field | Description |
-|-------|-------------|
+|-------|-----------|
 | `overall_rate` | Ratio of checked logs to total logs for the month (0–1) |
 | `streak` | Consecutive days ending today with at least one check |
 | `daily_rates` | Per-day breakdown, only up to today |

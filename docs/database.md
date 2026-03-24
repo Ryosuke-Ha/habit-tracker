@@ -181,7 +181,7 @@ One record per habit per day. Created lazily when the user loads the daily TODO 
 | `id` | INTEGER | PK, NOT NULL | Auto-increment surrogate key |
 | `habit_id` | INTEGER | FK `habits.id`, nullable | Link to the source habit. `NULL` for standalone entries |
 | `template_id` | INTEGER | FK `templates.id`, nullable | Template association for standalone entries (used for daily filtering) |
-| `date` | DATE | NOT NULL | The calendar date this log belongs to |
+| `date` | DATE | NOT NULL | The calendar date this log belongs to (determined using JST / UTC+9) |
 | `is_checked` | BOOLEAN | default `false` | Whether the habit was completed that day |
 | `title` | VARCHAR | nullable | Copied from the habit on detach; also used as the title for standalone logs |
 | `scheduled_time` | VARCHAR | nullable | Copied from the habit on detach; also used for standalone logs (`HH:MM`) |
@@ -335,7 +335,7 @@ Standalone daily logs (not linked to any habit) use `template_id` for scoping, s
 `subtasks` uses a `(todo_type, todo_id)` pair instead of multiple nullable foreign keys. There is no SQL-level referential integrity constraint — the application layer enforces validity. `todo_type` is either `"habit_log"` or `"persistent_todo"`.
 
 ### User → PersistentTodos (one-to-many)
-Filtered by `user_id = user_email`. Ordered by `created_at` ascending.
+Filtered by `user_id = user_email`. The list endpoint returns only incomplete todos, ordered by `created_at` ascending.
 
 ### User → WeeklyReviews (one-to-many)
 One review per user per week (unique on `(user_id, week_start_date)`). The API auto-creates a review record on first access for the current week.
@@ -436,4 +436,4 @@ All deletions are **hard deletes** — records are physically removed from the d
 
 All `DATETIME` columns store **UTC timestamps** using Python's `datetime.utcnow()`. The frontend is responsible for converting to the user's local timezone for display. No timezone-aware column types are used — this keeps the schema simple and avoids dialect-specific timestamp type differences between SQLite and PostgreSQL.
 
-Dates (`DATE` columns such as `daily_logs.date` and `weekly_reviews.week_start_date`) represent calendar dates with no time component and are always determined by the server's local date at request time.
+`DATE` columns such as `daily_logs.date` and `weekly_reviews.week_start_date` represent calendar dates with no time component. For daily logs, "today" is determined using **JST (UTC+9)** on the backend, ensuring consistent date boundaries for users in the Japan timezone regardless of the server's system clock timezone.
