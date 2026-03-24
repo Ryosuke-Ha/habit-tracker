@@ -1,7 +1,10 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+export type TodoKind = 'log' | 'persistent';
+
 export interface HabitItemData {
-  logId: number;
+  numericId: number;
+  kind: TodoKind;
   title: string;
   scheduledTime: string;
   location: string;
@@ -10,24 +13,24 @@ export interface HabitItemData {
 
 interface Props {
   item: HabitItemData;
-  onToggle: (logId: number, current: boolean) => void;
+  onToggle: (numericId: number, kind: TodoKind, current: boolean) => void;
 }
 
 export default function HabitItem({ item, onToggle }: Props) {
-  const { logId, title, scheduledTime, location, isChecked } = item;
-  const hasMeta = scheduledTime || location;
+  const { numericId, kind, title, scheduledTime, location, isChecked } = item;
+  const isPersistent = kind === 'persistent';
+  const hasMeta = Boolean(scheduledTime || location);
 
   return (
-    <View style={[styles.row, isChecked && styles.rowDone]}>
+    <TouchableOpacity
+      style={[styles.row, isPersistent && styles.rowPersistent, isChecked && styles.rowDone]}
+      onPress={() => onToggle(numericId, kind, isChecked)}
+      activeOpacity={0.7}
+    >
       {/* チェックボックス */}
-      <TouchableOpacity
-        onPress={() => onToggle(logId, isChecked)}
-        style={[styles.checkbox, isChecked && styles.checkboxDone]}
-        activeOpacity={0.7}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      >
+      <View style={[styles.checkbox, isChecked && styles.checkboxDone]}>
         {isChecked && <Text style={styles.checkmark}>✓</Text>}
-      </TouchableOpacity>
+      </View>
 
       {/* コンテンツ */}
       <View style={styles.content}>
@@ -39,8 +42,11 @@ export default function HabitItem({ item, onToggle }: Props) {
           </Text>
         )}
         <Text style={[styles.title, isChecked && styles.titleDone]}>{title}</Text>
+        {isPersistent && !isChecked && (
+          <Text style={styles.persistentLabel}>持ち越し</Text>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -48,24 +54,26 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 12,
   },
+  rowPersistent: {
+    backgroundColor: '#1c1508',
+    borderWidth: 1,
+    borderColor: '#78350f',
+  },
   rowDone: {
-    backgroundColor: '#F9FAFB',
-    borderColor: '#F3F4F6',
+    opacity: 0.45,
   },
   checkbox: {
     width: 26,
     height: 26,
     borderRadius: 13,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: '#555555',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -85,19 +93,24 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   meta: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    fontSize: 13,
+    color: '#888888',
   },
   metaDone: {
-    color: '#D1D5DB',
+    color: '#444444',
   },
   title: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
   },
   titleDone: {
-    color: '#D1D5DB',
+    color: '#555555',
     textDecorationLine: 'line-through',
+  },
+  persistentLabel: {
+    fontSize: 12,
+    color: '#d97706',
+    marginTop: 2,
   },
 });
