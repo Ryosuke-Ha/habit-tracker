@@ -6,9 +6,13 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import HabitItem, { type HabitItemData } from '@/components/HabitItem';
+import DrawerMenu from '@/components/DrawerMenu';
+import { useAuth } from '@/hooks/useAuth';
 import API_URL from '@/constants/api';
 
 interface Template {
@@ -39,6 +43,8 @@ function getTodayLabel(): string {
 }
 
 export default function TodayScreen() {
+  const { user, signOut } = useAuth();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [todos, setTodos] = useState<HabitItemData[]>([]);
@@ -118,14 +124,30 @@ export default function TodayScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* ハンバーガーメニュー */}
+      <DrawerMenu
+        visible={drawerOpen}
+        user={user}
+        onClose={() => setDrawerOpen(false)}
+        onSignOut={signOut}
+      />
+
       {/* ヘッダー */}
       <View style={styles.header}>
         <Text style={styles.dateLabel}>{getTodayLabel()}</Text>
-        {templateName !== '' && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{templateName}</Text>
-          </View>
-        )}
+        <View style={styles.headerRight}>
+          {templateName !== '' && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{templateName}</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            onPress={() => setDrawerOpen(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="menu" size={24} color="#374151" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* プログレスバー */}
@@ -197,12 +219,16 @@ const styles = StyleSheet.create({
     color: '#111827',
     flexShrink: 1,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   badge: {
     backgroundColor: '#F3F4F6',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    marginLeft: 8,
   },
   badgeText: {
     fontSize: 13,
