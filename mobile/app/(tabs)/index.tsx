@@ -90,6 +90,8 @@ export default function TodayScreen() {
   const [templateName, setTemplateName] = useState('');
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [prevTryItems, setPrevTryItems] = useState<KPTItem[]>([]);
+  const [monthlyGoal, setMonthlyGoal] = useState<string | null>(null);
+  const [monthlyGoalFetched, setMonthlyGoalFetched] = useState(false);
 
   // ─── データ取得 ───────────────────────────────────────────────────────────────
 
@@ -171,6 +173,26 @@ export default function TodayScreen() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // 今月の目標取得（前月のnext_month_goal）
+  useEffect(() => {
+    if (!user?.email) return;
+    fetch(`${API_URL}/reviews/monthly/current/goal`, {
+      headers: { 'X-User-Email': user.email },
+    })
+      .then((res) => {
+        if (res.ok) return res.json();
+        return null;
+      })
+      .then((data) => {
+        setMonthlyGoal(data?.goal ?? null);
+        setMonthlyGoalFetched(true);
+      })
+      .catch(() => {
+        setMonthlyGoal(null);
+        setMonthlyGoalFetched(true);
+      });
+  }, [user?.email]);
 
   // 前週のTryアイテム取得
   useEffect(() => {
@@ -391,26 +413,38 @@ export default function TodayScreen() {
             <HabitItem item={item} onToggle={handleToggle} userEmail={user?.email ?? ''} />
           )}
         ListHeaderComponent={
-          prevTryItems.length > 0 ? (
-            <View style={styles.prevTrySection}>
-              <Text style={styles.prevTrySectionTitle}>前週のTry</Text>
-              {prevTryItems.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.prevTryRow}
-                  onPress={() => handleToggleTryItem(item)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.prevTryCheckbox, item.is_completed && styles.prevTryCheckboxDone]}>
-                    {item.is_completed && <Text style={styles.prevTryCheckmark}>✓</Text>}
-                  </View>
-                  <Text style={[styles.prevTryContent, item.is_completed && styles.prevTryContentDone]}>
-                    {item.content}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null
+          <View>
+            {/* 今月の目標カード */}
+            {monthlyGoalFetched && (
+              <View style={styles.monthlyGoalCard}>
+                <Text style={styles.monthlyGoalLabel}>今月の目標</Text>
+                <Text style={styles.monthlyGoalText}>
+                  {monthlyGoal || '今月の目標が未設定です'}
+                </Text>
+              </View>
+            )}
+            {/* 前週のTryセクション */}
+            {prevTryItems.length > 0 && (
+              <View style={styles.prevTrySection}>
+                <Text style={styles.prevTrySectionTitle}>前週のTry</Text>
+                {prevTryItems.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.prevTryRow}
+                    onPress={() => handleToggleTryItem(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.prevTryCheckbox, item.is_completed && styles.prevTryCheckboxDone]}>
+                      {item.is_completed && <Text style={styles.prevTryCheckmark}>✓</Text>}
+                    </View>
+                    <Text style={[styles.prevTryContent, item.is_completed && styles.prevTryContentDone]}>
+                      {item.content}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         }
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -538,6 +572,27 @@ const styles = StyleSheet.create({
     color: '#555555',
     marginTop: 60,
     fontSize: 16,
+  },
+  // 今月の目標カード
+  monthlyGoalCard: {
+    backgroundColor: '#0c1a3a',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1e3a8a',
+    padding: 14,
+    marginBottom: 8,
+    gap: 4,
+  },
+  monthlyGoalLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#60a5fa',
+    letterSpacing: 0.5,
+  },
+  monthlyGoalText: {
+    fontSize: 15,
+    color: '#bfdbfe',
+    lineHeight: 22,
   },
   // 前週のTryセクション
   prevTrySection: {

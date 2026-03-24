@@ -42,6 +42,15 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="monthly"
+        options={{
+          title: '月次',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon name="bar-chart-outline" color={color} size={size} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
