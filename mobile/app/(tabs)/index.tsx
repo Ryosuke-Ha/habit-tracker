@@ -344,7 +344,9 @@ export default function TodayScreen() {
       <FlatList
         data={todos}
         keyExtractor={(item) => `${item.kind}-${item.numericId}`}
-        renderItem={({ item }) => <HabitItem item={item} onToggle={handleToggle} />}
+        renderItem={({ item }) => (
+            <HabitItem item={item} onToggle={handleToggle} userEmail={user?.email ?? ''} />
+          )}
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshControl={
