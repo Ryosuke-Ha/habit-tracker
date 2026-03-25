@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import HabitItem, { type HabitItemData, type TodoKind } from '@/components/HabitItem';
 import DrawerMenu from '@/components/DrawerMenu';
 import AddTodoModal, { type AddTodoFormData } from '@/components/AddTodoModal';
@@ -98,15 +99,44 @@ export default function TodayScreen() {
   const fetchData = useCallback(async () => {
     try {
       setError(null);
+      const userEmail = user?.email ?? '';
+      const dow = new Date().getDay();
 
-      // 1. テンプレート取得 → 曜日で自動判定
-      const templatesRes = await fetch(`${API_URL}/templates`);
+      // 1. habit_day_template_map を取得して今日のテンプレートIDを決定
+      let mappedTemplateId: number | null = null;
+      try {
+        const settingsRes = await fetch(`${API_URL}/settings`, {
+          headers: { 'X-User-Email': userEmail },
+        });
+        if (settingsRes.ok) {
+          const settingsData: Record<string, string> = await settingsRes.json();
+          const raw = settingsData['habit_day_template_map'];
+          if (raw) {
+            const parsed: Record<string, unknown> = JSON.parse(raw);
+            const val = parsed[String(dow)];
+            if (val != null) {
+              mappedTemplateId = Number(val);
+            }
+          }
+        }
+      } catch {}
+
+      // 2. テンプレート一覧取得
+      const templatesRes = await fetch(`${API_URL}/templates`, {
+        headers: { 'X-User-Email': userEmail },
+      });
       if (!templatesRes.ok) throw new Error('テンプレートの取得に失敗しました');
       const templates: Template[] = await templatesRes.json();
 
-      const dow = new Date().getDay();
-      const fallback = dow === 0 || dow === 6 ? '休日' : '平日';
-      const matched = templates.find((t) => t.name === fallback) ?? templates[0];
+      // 3. テンプレート決定: 設定 → デフォルト名 → 先頭
+      let matched: Template | undefined;
+      if (mappedTemplateId !== null) {
+        matched = templates.find((t) => t.id === mappedTemplateId);
+      }
+      if (!matched) {
+        const fallback = dow === 0 || dow === 6 ? '休日' : '平日';
+        matched = templates.find((t) => t.name === fallback) ?? templates[0];
+      }
       if (!matched) {
         setTodos([]);
         return;
@@ -114,8 +144,10 @@ export default function TodayScreen() {
       setTemplateName(matched.name);
       setTemplateId(matched.id);
 
-      // 2. 今日のログ取得
-      const logsRes = await fetch(`${API_URL}/logs/today?template_id=${matched.id}`);
+      // 4. 今日のログ取得
+      const logsRes = await fetch(`${API_URL}/logs/today?template_id=${matched.id}`, {
+        headers: { 'X-User-Email': userEmail },
+      });
       if (!logsRes.ok) throw new Error('TODOの取得に失敗しました');
       const logs: LogApiResponse[] = await logsRes.json();
 
@@ -129,8 +161,6 @@ export default function TodayScreen() {
       }));
 
       // 3. 持ち越しTODO取得（失敗してもログのみで続行）
-      // X-User-Email ヘッダーが必須のため user.email を付与する
-      const userEmail = user?.email ?? '';
       const persistentUrl = `${API_URL}/persistent-todos`;
       console.log('[persistent-todos] fetching from:', persistentUrl, 'user:', userEmail);
       let persistentItems: HabitItemData[] = [];
@@ -170,9 +200,12 @@ export default function TodayScreen() {
     }
   }, [user]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  // 画面フォーカス時に毎回再取得（テンプレート管理画面から戻った時も反映）
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   // 今月の目標取得（前月のnext_month_goal）
   useEffect(() => {
