@@ -278,7 +278,7 @@ export default function Home() {
       prev.map((l) => l.logId === logId ? { ...l, title: data.title, scheduledTime: data.scheduled_time, location: data.location } : l)
         .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
     );
-    const url = habitId != null ? `${API}/habits/${habitId}` : `${API}/logs/standalone/${logId}`;
+    const url = `${API}/logs/${logId}`;
     fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
