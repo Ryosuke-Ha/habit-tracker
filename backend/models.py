@@ -47,7 +47,8 @@ class DailyLog(Base):
     habit_id = Column(Integer, ForeignKey("habits.id"), nullable=True)  # nullable: standalone logs have no habit
     date = Column(Date, nullable=False)
     is_checked = Column(Boolean, default=False)
-    # Standalone (one-off) fields — populated when habit_id is None
+    is_deleted = Column(Boolean, default=False)  # soft-delete: prevents regeneration on reload
+    # Standalone (one-off) fields — populated when habit_id is None, or used as edit override
     title = Column(String, nullable=True)
     scheduled_time = Column(String, nullable=True)
     location = Column(String, nullable=True)

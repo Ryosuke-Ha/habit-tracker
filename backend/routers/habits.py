@@ -67,9 +67,25 @@ class StandaloneLogUpdate(BaseModel):
     location: str = ""
 
 
+class LogUpdate(BaseModel):
+    """Used by PUT /logs/{log_id} — updates the log's own fields without touching the Habit."""
+    title: str
+    scheduled_time: str
+    location: str = ""
+
+
 def _build_log_response(log: models.DailyLog, habit: Optional[models.Habit] = None, order: int = 0) -> LogResponse:
-    """Build a LogResponse from a DailyLog, resolving title/time/location from habit or standalone fields."""
-    if habit is not None:
+    """Build a LogResponse from a DailyLog.
+
+    Priority:
+    1. If the log has its own title set (edit override or standalone), use log fields.
+    2. Otherwise fall back to the linked habit's fields.
+    This ensures that TODO-screen edits (PUT /logs/{id}) only affect the DailyLog,
+    never the underlying Habit template.
+    """
+    has_override = log.title is not None
+    if habit is not None and not has_override:
+        # Habit-linked log with no override: use habit fields (original behaviour)
         return LogResponse(
             id=log.id,
             habit_id=habit.id,
@@ -79,14 +95,15 @@ def _build_log_response(log: models.DailyLog, habit: Optional[models.Habit] = No
             is_checked=log.is_checked,
             order=order,
         )
+    # Standalone log or edited habit-linked log: use log's own fields
     return LogResponse(
         id=log.id,
-        habit_id=None,
+        habit_id=habit.id if habit else None,
         title=log.title or "",
         scheduled_time=log.scheduled_time or "00:00",
         location=log.location or "",
         is_checked=log.is_checked,
-        order=999,
+        order=order if habit else 999,
     )
 
 
@@ -159,6 +176,8 @@ def get_today_logs(template_id: int, db: Session = Depends(get_db)):
     )
     habit_ids = [h.id for h in habits]
 
+    # Fetch ALL logs for today (including is_deleted=True) so we know which habits
+    # have already been explicitly deleted and must NOT be regenerated.
     existing = {
         log.habit_id: log
         for log in db.query(models.DailyLog)
@@ -173,19 +192,25 @@ def get_today_logs(template_id: int, db: Session = Depends(get_db)):
     result = []
     for i, habit in enumerate(habits):
         if habit.id not in existing:
+            # No log yet for today → auto-create
             log = models.DailyLog(habit_id=habit.id, date=today, is_checked=False)
             db.add(log)
             db.flush()
             existing[habit.id] = log
-        result.append(_build_log_response(existing[habit.id], habit=habit, order=i))
+            result.append(_build_log_response(log, habit=habit, order=i))
+        elif not existing[habit.id].is_deleted:
+            # Log exists and is NOT soft-deleted → include in result
+            result.append(_build_log_response(existing[habit.id], habit=habit, order=i))
+        # is_deleted=True → skip (don't regenerate, don't include in result)
 
-    # Include standalone logs for today belonging to this template
+    # Include non-deleted standalone logs for today belonging to this template
     standalone_logs = (
         db.query(models.DailyLog)
         .filter(
             models.DailyLog.habit_id.is_(None),
             models.DailyLog.date == today,
             models.DailyLog.template_id == template_id,
+            models.DailyLog.is_deleted == False,  # noqa: E712
         )
         .all()
     )
@@ -230,12 +255,39 @@ def update_standalone_log(log_id: int, body: StandaloneLogUpdate, db: Session = 
     return _build_log_response(log)
 
 
-@router.delete("/logs/{log_id}")
-def delete_log(log_id: int, db: Session = Depends(get_db)):
+@router.put("/logs/{log_id}", response_model=LogResponse)
+def update_log(log_id: int, body: LogUpdate, db: Session = Depends(get_db)):
+    """Update a DailyLog's display fields without touching the Habit template.
+
+    For habit-linked logs, sets title/scheduled_time/location as an override so that
+    future calls to _build_log_response will use these values instead of the habit's.
+    The Habit record is never modified — template management screen is unaffected.
+    """
     log = db.query(models.DailyLog).filter(models.DailyLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
-    db.delete(log)
+    log.title = body.title
+    log.scheduled_time = body.scheduled_time
+    log.location = body.location
+    db.commit()
+    db.refresh(log)
+    habit = None
+    if log.habit_id is not None:
+        habit = db.query(models.Habit).filter(models.Habit.id == log.habit_id).first()
+    return _build_log_response(log, habit=habit)
+
+
+@router.delete("/logs/{log_id}")
+def delete_log(log_id: int, db: Session = Depends(get_db)):
+    """Soft-delete a DailyLog.
+
+    Sets is_deleted=True instead of removing the row, so that get_today_logs
+    knows not to regenerate a new log for this habit on the same day.
+    """
+    log = db.query(models.DailyLog).filter(models.DailyLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+    log.is_deleted = True
     db.commit()
     return {"ok": True}
 
