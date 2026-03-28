@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optimistic UI for subtask creation — subtask appears instantly and is reconciled after the server responds
 - Optimistic UI for adding new habits/persistent TODOs via the modal — items appear instantly before server confirmation
 - Double-submit prevention on the add-item modal and subtask add button
+- HamburgerMenu navigation added to the weekly review, monthly review, and template management pages
+- Double-submit prevention on all template CRUD operations (add, rename, delete) and habit CRUD operations (add, edit, delete) on the templates page
+- Optimistic UI for habit deletion on the templates page with rollback on failure
+- Saving indicator (`savingId`) for KPT item edits on the weekly review page
 
 ### Changed
 
@@ -24,8 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Subtask input placeholder simplified from "＋ サブタスクを追加 (Enter)" to "サブタスクを追加"
 - Add subtask button is disabled when the input field is empty or a submission is in progress
 - Add-item modal submit button is disabled while a submission is in progress
+- Weekly review KPT items for Keep/Problem now display in a card-style layout with click-to-edit and inline editing (replacing the previous bullet-point list with separate edit/save buttons)
+- Weekly review KPT Try items now display without bullet points ("・" prefix removed)
+- Monthly review "Next month's goal" section is now always visible and editable regardless of whether the month is in the past or future (read-only restriction removed)
+- Header layout on weekly review, monthly review, and templates pages changed to `justify-between` to accommodate the hamburger menu on the right
 
 ### Fixed
+
+- Fixed trailing slash in the previous week's review API call on the weekly review page
+- Added error handling for failed previous week review fetch to prevent unhandled promise rejections
+- Previous week's Try items state is now properly reset on week navigation to prevent stale data
 
 ### Removed
 
