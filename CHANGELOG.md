@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Double-submit prevention on all template CRUD operations (add, rename, delete) and habit CRUD operations (add, edit, delete) on the templates page
 - Optimistic UI for habit deletion on the templates page with rollback on failure
 - Saving indicator (`savingId`) for KPT item edits on the weekly review page
+- Collapsible "completed items" accordion on the daily TODO dashboard — done items are grouped into a toggleable section instead of being shown inline
 
 ### Changed
 
@@ -32,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Weekly review KPT Try items now display without bullet points ("・" prefix removed)
 - Monthly review "Next month's goal" section is now always visible and editable regardless of whether the month is in the past or future (read-only restriction removed)
 - Header layout on weekly review, monthly review, and templates pages changed to `justify-between` to accommodate the hamburger menu on the right
+- Daily TODO list now separates incomplete and completed items — incomplete items are shown first, completed items are hidden behind a collapsible "完了済み" accordion that defaults to collapsed
 
 ### Fixed
 
