@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
+import HamburgerMenu from "@/components/HamburgerMenu";
 import {
   BarChart,
   Bar,
@@ -156,13 +157,24 @@ export default function MonthlyReviewPage() {
   if (status === "loading" || loading) {
     return (
       <main>
-        <div className="flex items-center gap-3 mb-8">
-          <button onClick={() => router.push("/")} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h1 className="text-xl font-bold text-gray-900">月の振り返り</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.push("/")} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h1 className="text-xl font-bold text-gray-900">月の振り返り</h1>
+          </div>
+          <HamburgerMenu
+            user={session?.user}
+            onSignOut={() => signOut({ callbackUrl: "/login" })}
+            items={[
+              { label: "TODO", onClick: () => router.push("/"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+              { label: "テンプレートを管理", onClick: () => router.push("/templates"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg> },
+              { label: "週の振り返り", onClick: () => router.push("/review/weekly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
+            ]}
+          />
         </div>
         <div className="flex justify-center py-16 text-gray-400 text-sm">読み込み中…</div>
       </main>
@@ -172,17 +184,28 @@ export default function MonthlyReviewPage() {
   return (
     <main>
       {/* ヘッダー */}
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => router.push("/")}
-          className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          aria-label="戻る"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1 className="text-xl font-bold text-gray-900">月の振り返り</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push("/")}
+            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="戻る"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold text-gray-900">月の振り返り</h1>
+        </div>
+        <HamburgerMenu
+          user={session?.user}
+          onSignOut={() => signOut({ callbackUrl: "/login" })}
+          items={[
+            { label: "TODO", onClick: () => router.push("/"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+            { label: "テンプレートを管理", onClick: () => router.push("/templates"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg> },
+            { label: "週の振り返り", onClick: () => router.push("/review/weekly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
+          ]}
+        />
       </div>
 
       {/* 月ナビゲーション */}
@@ -293,44 +316,30 @@ export default function MonthlyReviewPage() {
       </div>
 
       {/* ---- セクション2: 来月の目標 ---- */}
-      {!isFuture && (
-        <div className="p-4 bg-white border border-gray-200 rounded-xl">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-700">🎯 来月の目標</h2>
-            {isPast && (
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">読み取り専用</span>
-            )}
-          </div>
-
-          {isPast ? (
-            <p className={`text-sm leading-relaxed ${review?.next_month_goal ? "text-gray-800" : "text-gray-400 italic"}`}>
-              {review?.next_month_goal || "未設定"}
-            </p>
-          ) : (
-            <>
-              <textarea
-                value={goal}
-                onChange={(e) => { setGoal(e.target.value); setSaved(false); }}
-                placeholder="来月取り組みたいことを書いてください…"
-                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-800 placeholder-gray-300"
-                rows={4}
-              />
-              <div className="flex items-center justify-end gap-3 mt-2">
-                {saved && (
-                  <span className="text-xs text-emerald-500">保存しました ✓</span>
-                )}
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-1.5 text-sm bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 transition-colors"
-                >
-                  {saving ? "保存中…" : "保存する"}
-                </button>
-              </div>
-            </>
-          )}
+      <div className="p-4 bg-white border border-gray-200 rounded-xl">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700">🎯 来月の目標</h2>
         </div>
-      )}
+        <textarea
+          value={goal}
+          onChange={(e) => { setGoal(e.target.value); setSaved(false); }}
+          placeholder="来月取り組みたいことを書いてください…"
+          className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-800 placeholder-gray-300"
+          rows={4}
+        />
+        <div className="flex items-center justify-end gap-3 mt-2">
+          {saved && (
+            <span className="text-xs text-emerald-500">保存しました ✓</span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-1.5 text-sm bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+          >
+            {saving ? "保存中…" : "保存する"}
+          </button>
+        </div>
+      </div>
     </main>
   );
 }

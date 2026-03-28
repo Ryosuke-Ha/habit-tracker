@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import { useSetting } from "@/hooks/useSetting";
+import HamburgerMenu from "@/components/HamburgerMenu";
 
 interface Template { id: number; name: string; }
 interface Habit { id: number; template_id: number; title: string; scheduled_time: string; location: string; order: number; }
@@ -24,6 +26,7 @@ const TIME_OPTIONS = generateTimeOptions();
 
 export default function TemplatesPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const { getSetting, setSetting } = useSetting();
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -51,6 +54,14 @@ export default function TemplatesPage() {
 
   // Day-of-week mapping
   const [dayMap, setDayMap] = useState<Record<string, string>>({});
+
+  // Submitting states (二重送信防止)
+  const [submittingAddTemplate, setSubmittingAddTemplate] = useState(false);
+  const [submittingRenameTemplate, setSubmittingRenameTemplate] = useState(false);
+  const [submittingDeleteTemplate, setSubmittingDeleteTemplate] = useState(false);
+  const [submittingAddHabit, setSubmittingAddHabit] = useState(false);
+  const [submittingEditHabit, setSubmittingEditHabit] = useState(false);
+  const [deletingHabitId, setDeletingHabitId] = useState<number | null>(null);
 
   useEffect(() => { fetchTemplates(); }, []);
   useEffect(() => { if (editingId !== null) editInputRef.current?.focus(); }, [editingId]);
@@ -123,78 +134,115 @@ export default function TemplatesPage() {
 
   // Template CRUD
   async function handleRename(id: number) {
-    if (!editingName.trim()) return;
-    await fetch(`${API}/templates/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: editingName.trim() }),
-    });
-    setEditingId(null);
-    fetchTemplates();
+    if (!editingName.trim() || submittingRenameTemplate) return;
+    setSubmittingRenameTemplate(true);
+    try {
+      await fetch(`${API}/templates/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editingName.trim() }),
+      });
+      setEditingId(null);
+      fetchTemplates();
+    } finally {
+      setSubmittingRenameTemplate(false);
+    }
   }
 
   async function handleDelete(id: number) {
-    await fetch(`${API}/templates/${id}`, { method: "DELETE" });
-    setConfirmDeleteId(null);
-    fetchTemplates();
+    if (submittingDeleteTemplate) return;
+    setSubmittingDeleteTemplate(true);
+    try {
+      await fetch(`${API}/templates/${id}`, { method: "DELETE" });
+      setConfirmDeleteId(null);
+      fetchTemplates();
+    } finally {
+      setSubmittingDeleteTemplate(false);
+    }
   }
 
   async function handleAdd() {
-    if (!newName.trim()) return;
-    await fetch(`${API}/templates`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() }),
-    });
-    setNewName("");
-    setAddingNew(false);
-    fetchTemplates();
+    if (!newName.trim() || submittingAddTemplate) return;
+    setSubmittingAddTemplate(true);
+    try {
+      await fetch(`${API}/templates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      setNewName("");
+      setAddingNew(false);
+      fetchTemplates();
+    } finally {
+      setSubmittingAddTemplate(false);
+    }
   }
 
   // Habit CRUD
   async function handleAddHabit(templateId: number) {
-    if (!newHabit.title.trim()) return;
-    const res = await fetch(`${API}/habits`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: newHabit.title.trim(),
-        scheduled_time: newHabit.scheduled_time,
-        location: newHabit.location.trim(),
-        template_id: templateId,
-      }),
-    });
-    const habit: Habit = await res.json();
-    setHabitsByTemplate((prev) => ({
-      ...prev,
-      [templateId]: [...(prev[templateId] || []), habit].sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)),
-    }));
-    setAddingHabitFor(null);
-    setNewHabit({ title: "", scheduled_time: "07:00", location: "" });
+    if (!newHabit.title.trim() || submittingAddHabit) return;
+    setSubmittingAddHabit(true);
+    try {
+      const res = await fetch(`${API}/habits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newHabit.title.trim(),
+          scheduled_time: newHabit.scheduled_time,
+          location: newHabit.location.trim(),
+          template_id: templateId,
+        }),
+      });
+      const habit: Habit = await res.json();
+      setHabitsByTemplate((prev) => ({
+        ...prev,
+        [templateId]: [...(prev[templateId] || []), habit].sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)),
+      }));
+      setAddingHabitFor(null);
+      setNewHabit({ title: "", scheduled_time: "07:00", location: "" });
+    } finally {
+      setSubmittingAddHabit(false);
+    }
   }
 
   async function handleEditHabit(habitId: number, templateId: number) {
-    const res = await fetch(`${API}/habits/${habitId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: editHabit.title.trim(), scheduled_time: editHabit.scheduled_time, location: editHabit.location.trim() }),
-    });
-    const updated: Habit = await res.json();
-    setHabitsByTemplate((prev) => ({
-      ...prev,
-      [templateId]: (prev[templateId] || [])
-        .map((h) => (h.id === habitId ? updated : h))
-        .sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)),
-    }));
-    setEditingHabitId(null);
+    if (submittingEditHabit) return;
+    setSubmittingEditHabit(true);
+    try {
+      const res = await fetch(`${API}/habits/${habitId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: editHabit.title.trim(), scheduled_time: editHabit.scheduled_time, location: editHabit.location.trim() }),
+      });
+      const updated: Habit = await res.json();
+      setHabitsByTemplate((prev) => ({
+        ...prev,
+        [templateId]: (prev[templateId] || [])
+          .map((h) => (h.id === habitId ? updated : h))
+          .sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time)),
+      }));
+      setEditingHabitId(null);
+    } finally {
+      setSubmittingEditHabit(false);
+    }
   }
 
   async function handleDeleteHabit(habitId: number, templateId: number) {
-    await fetch(`${API}/habits/${habitId}`, { method: "DELETE" });
+    if (deletingHabitId !== null) return;
+    setDeletingHabitId(habitId);
+    // オプティミスティックUI
     setHabitsByTemplate((prev) => ({
       ...prev,
       [templateId]: (prev[templateId] || []).filter((h) => h.id !== habitId),
     }));
+    try {
+      await fetch(`${API}/habits/${habitId}`, { method: "DELETE" });
+    } catch {
+      // ロールバック
+      fetchHabits(templateId);
+    } finally {
+      setDeletingHabitId(null);
+    }
   }
 
   function handleDayMapChange(day: string, templateId: string) {
@@ -206,18 +254,29 @@ export default function TemplatesPage() {
   return (
     <main>
       {/* ヘッダー */}
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          aria-label="戻る"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1 className="text-xl font-bold text-gray-900">テンプレートを管理</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="戻る"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold text-gray-900">テンプレートを管理</h1>
+        </div>
+        <HamburgerMenu
+          user={session?.user}
+          onSignOut={() => signOut({ callbackUrl: "/login" })}
+          items={[
+            { label: "TODO", onClick: () => router.push("/"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+            { label: "週の振り返り", onClick: () => router.push("/review/weekly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
+            { label: "月の振り返り", onClick: () => router.push("/review/monthly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
+          ]}
+        />
       </div>
 
       {error && (
@@ -246,7 +305,7 @@ export default function TemplatesPage() {
                       「{t.name}」を削除しますか？
                       <span className="block text-xs font-normal text-red-500 mt-0.5">紐付く習慣もすべて削除されます</span>
                     </p>
-                    <button type="button" onClick={() => handleDelete(t.id)} className="text-xs px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium">削除する</button>
+                    <button type="button" onClick={() => handleDelete(t.id)} disabled={submittingDeleteTemplate} className="text-xs px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{submittingDeleteTemplate ? "削除中…" : "削除する"}</button>
                     <button type="button" onClick={() => setConfirmDeleteId(null)} className="text-xs px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">取消</button>
                   </div>
                 ) : editingId === t.id ? (
@@ -258,8 +317,8 @@ export default function TemplatesPage() {
                       onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); if (e.key === "Escape") setEditingId(null); }}
                       className="flex-1 border border-blue-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
-                    <button type="button" onClick={() => handleRename(t.id)} className="text-xs px-3 py-1.5 bg-black text-white rounded-lg hover:bg-gray-800 font-medium">保存</button>
-                    <button type="button" onClick={() => setEditingId(null)} className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">取消</button>
+                    <button type="button" onClick={() => handleRename(t.id)} disabled={submittingRenameTemplate} className="text-xs px-3 py-1.5 bg-black text-white rounded-lg hover:bg-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{submittingRenameTemplate ? "保存中…" : "保存"}</button>
+                    <button type="button" onClick={() => setEditingId(null)} disabled={submittingRenameTemplate} className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">取消</button>
                   </div>
                 ) : (
                   <>
@@ -341,8 +400,8 @@ export default function TemplatesPage() {
                                         />
                                       </div>
                                       <div className="flex gap-2 justify-end">
-                                        <button type="button" onClick={() => handleEditHabit(h.id, t.id)} className="text-xs px-3 py-1.5 bg-black text-white rounded-lg hover:bg-gray-800 font-medium">保存</button>
-                                        <button type="button" onClick={() => setEditingHabitId(null)} className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">取消</button>
+                                        <button type="button" onClick={() => handleEditHabit(h.id, t.id)} disabled={submittingEditHabit} className="text-xs px-3 py-1.5 bg-black text-white rounded-lg hover:bg-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed">{submittingEditHabit ? "保存中…" : "保存"}</button>
+                                        <button type="button" onClick={() => setEditingHabitId(null)} disabled={submittingEditHabit} className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">取消</button>
                                       </div>
                                     </div>
                                   ) : (
@@ -363,7 +422,8 @@ export default function TemplatesPage() {
                                       <button
                                         type="button"
                                         onClick={() => handleDeleteHabit(h.id, t.id)}
-                                        className="text-xs px-2 py-1 text-red-400 hover:bg-red-50 rounded-lg"
+                                        disabled={deletingHabitId !== null}
+                                        className="text-xs px-2 py-1 text-red-400 hover:bg-red-50 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
                                         削除
                                       </button>
@@ -405,15 +465,16 @@ export default function TemplatesPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleAddHabit(t.id)}
-                                    disabled={!newHabit.title.trim()}
-                                    className="text-xs px-3 py-1.5 bg-black text-white rounded-lg hover:bg-gray-800 font-medium disabled:opacity-40"
+                                    disabled={!newHabit.title.trim() || submittingAddHabit}
+                                    className="text-xs px-3 py-1.5 bg-black text-white rounded-lg hover:bg-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    追加
+                                    {submittingAddHabit ? "追加中…" : "追加"}
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => { setAddingHabitFor(null); setNewHabit({ title: "", scheduled_time: "07:00", location: "" }); }}
-                                    className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
+                                    disabled={submittingAddHabit}
+                                    className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     取消
                                   </button>
@@ -452,8 +513,8 @@ export default function TemplatesPage() {
                 placeholder="テンプレート名を入力"
                 className="flex-1 border border-blue-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
-              <button type="button" onClick={handleAdd} disabled={!newName.trim()} className="px-4 py-3 bg-black text-white text-sm font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-40 transition-colors">追加</button>
-              <button type="button" onClick={() => { setAddingNew(false); setNewName(""); }} className="px-4 py-3 bg-gray-100 text-gray-600 text-sm rounded-xl hover:bg-gray-200 transition-colors">取消</button>
+              <button type="button" onClick={handleAdd} disabled={!newName.trim() || submittingAddTemplate} className="px-4 py-3 bg-black text-white text-sm font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">{submittingAddTemplate ? "追加中…" : "追加"}</button>
+              <button type="button" onClick={() => { setAddingNew(false); setNewName(""); }} disabled={submittingAddTemplate} className="px-4 py-3 bg-gray-100 text-gray-600 text-sm rounded-xl hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">取消</button>
             </div>
           ) : (
             <button

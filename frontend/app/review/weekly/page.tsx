@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
+import HamburgerMenu from "@/components/HamburgerMenu";
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -73,6 +74,7 @@ export default function WeeklyReviewPage() {
   const [newContent, setNewContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [savingId, setSavingId] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
@@ -88,6 +90,7 @@ export default function WeeklyReviewPage() {
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.email) return;
     loadReview();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWeekStart, status, session]);
 
   useEffect(() => {
@@ -104,6 +107,7 @@ export default function WeeklyReviewPage() {
 
   async function loadReview() {
     setLoading(true);
+    setPrevTryItems([]);
     const email = session!.user!.email!;
     const headers = { "X-User-Email": email };
 
@@ -111,9 +115,10 @@ export default function WeeklyReviewPage() {
       const [reviewRes, prevRes] = await Promise.all([
         fetch(`${API}/reviews/weekly/${currentWeekStart}`, { headers }),
         fetch(
-          `${API}/reviews/weekly/${getPrevSundayStr(currentWeekStart)}/`,
+          `${API}/reviews/weekly/${getPrevSundayStr(currentWeekStart)}`,
           { headers }
         ).then(async (r) => {
+          if (!r.ok) throw new Error();
           const data: WeeklyReview = await r.json();
           return data.kpt_items.filter((i) => i.type === "try");
         }).catch(() => [] as KPTItem[]),
@@ -178,6 +183,7 @@ export default function WeeklyReviewPage() {
       prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === itemId ? { ...i, content } : i)) } : prev
     );
     setEditingId(null);
+    setSavingId(itemId);
     try {
       const res = await fetch(`${API}/reviews/kpt/${itemId}`, {
         method: "PUT",
@@ -192,6 +198,8 @@ export default function WeeklyReviewPage() {
       if (prevItem) setReview((prev) =>
         prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === itemId ? prevItem : i)) } : prev
       );
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -218,16 +226,18 @@ export default function WeeklyReviewPage() {
   if (status === "loading" || loading) {
     return (
       <main>
-        <div className="flex items-center gap-3 mb-8">
-          <button
-            onClick={() => router.push("/")}
-            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h1 className="text-xl font-bold text-gray-900">週の振り返り</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/")}
+              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h1 className="text-xl font-bold text-gray-900">週の振り返り</h1>
+          </div>
         </div>
         <div className="flex justify-center py-16 text-gray-400 text-sm">読み込み中…</div>
       </main>
@@ -237,17 +247,40 @@ export default function WeeklyReviewPage() {
   return (
     <main>
       {/* ヘッダー */}
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => router.push("/")}
-          className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          aria-label="戻る"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1 className="text-xl font-bold text-gray-900">週の振り返り</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push("/")}
+            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="戻る"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold text-gray-900">週の振り返り</h1>
+        </div>
+        <HamburgerMenu
+          user={session?.user}
+          onSignOut={() => signOut({ callbackUrl: "/login" })}
+          items={[
+            {
+              label: "TODO",
+              onClick: () => router.push("/"),
+              icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
+            },
+            {
+              label: "テンプレートを管理",
+              onClick: () => router.push("/templates"),
+              icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg>,
+            },
+            {
+              label: "月の振り返り",
+              onClick: () => router.push("/review/monthly"),
+              icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+            },
+          ]}
+        />
       </div>
 
       {/* 週ナビゲーション */}
@@ -334,30 +367,90 @@ export default function WeeklyReviewPage() {
 
             {/* アイテム一覧 */}
             {items.length > 0 && (
-              <ul className="px-4 pb-3">
+              <ul className="px-4 pb-3 space-y-2">
                 {items.map((item) => (
-                  <li key={item.id} className="flex items-start gap-2 group mb-2">
-                    {/* チェックボタン（Tryのみ） */}
-                    {type === "try" && (
-                      <button
-                        onClick={() => handleToggleComplete(item)}
-                        className={`mt-0.5 w-5 h-5 flex-shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          item.is_completed
-                            ? "bg-blue-500 border-blue-500 text-white"
-                            : "border-blue-300 hover:border-blue-400"
-                        }`}
-                      >
-                        {item.is_completed && (
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
-                    )}
+                  <li key={item.id}>
+                    {type === "try" ? (
+                      /* Try: チェックボタン＋シンプルテキスト（・なし）、既存の編集ボタンも維持 */
+                      <div className="flex items-start gap-2 group">
+                        <button
+                          onClick={() => handleToggleComplete(item)}
+                          className={`mt-0.5 w-5 h-5 flex-shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
+                            item.is_completed
+                              ? "bg-blue-500 border-blue-500 text-white"
+                              : "border-blue-300 hover:border-blue-400"
+                          }`}
+                        >
+                          {item.is_completed && (
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
 
-                    {/* コンテンツ（編集中 or 表示） */}
-                    {editingId === item.id ? (
-                      <div className="flex-1 flex gap-2">
+                        {editingId === item.id ? (
+                          <div className="flex-1 flex gap-2">
+                            <textarea
+                              ref={editRef}
+                              value={editContent}
+                              onChange={(e) => setEditContent(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") e.preventDefault();
+                                if (e.key === "Escape") setEditingId(null);
+                              }}
+                              onBlur={() => window.scrollTo(0, 0)}
+                              className="flex-1 text-sm border border-gray-300 rounded-lg px-2 py-1 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                              rows={2}
+                            />
+                            <div className="flex flex-col gap-1">
+                              <button
+                                onClick={() => handleEditSave(item.id)}
+                                className="text-xs px-2 py-1 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600"
+                              >
+                                保存
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span
+                            className={`flex-1 text-sm leading-relaxed ${
+                              item.is_completed ? "line-through text-gray-400" : "text-gray-800"
+                            }`}
+                          >
+                            {item.content}
+                          </span>
+                        )}
+
+                        {editingId !== item.id && (
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                            <button
+                              onClick={() => { setEditingId(item.id); setEditContent(item.content); }}
+                              className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-white/80 rounded"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : editingId === item.id ? (
+                      /* Keep/Problem: 編集中（インライン） */
+                      <div className="bg-white rounded-xl border border-indigo-300 shadow-sm p-3">
                         <textarea
                           ref={editRef}
                           value={editContent}
@@ -366,49 +459,43 @@ export default function WeeklyReviewPage() {
                             if (e.key === "Enter") e.preventDefault();
                             if (e.key === "Escape") setEditingId(null);
                           }}
-                          onBlur={() => window.scrollTo(0, 0)}
-                          className="flex-1 text-sm border border-gray-300 rounded-lg px-2 py-1 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                          onBlur={() => {
+                            if (editContent.trim()) {
+                              handleEditSave(item.id);
+                            } else {
+                              setEditingId(null);
+                            }
+                          }}
+                          className="w-full text-sm resize-none focus:outline-none text-gray-800 bg-transparent"
                           rows={2}
                         />
-                        <div className="flex flex-col gap-1">
-                          <button
-                            onClick={() => handleEditSave(item.id)}
-                            className="text-xs px-2 py-1 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600"
-                          >
-                            保存
-                          </button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
-                          >
-                            取消
-                          </button>
-                        </div>
                       </div>
                     ) : (
-                      <span
-                        className={`flex-1 text-sm leading-relaxed ${
-                          item.is_completed ? "line-through text-gray-400" : "text-gray-800"
-                        }`}
-                      >
-                        ・{item.content}
-                      </span>
-                    )}
-
-                    {/* 編集・削除ボタン */}
-                    {editingId !== item.id && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                        <button
+                      /* Keep/Problem: 表示（カード形式、クリックで編集） */
+                      <div className="group/card flex items-start gap-1.5">
+                        <div
+                          className="flex-1 bg-white rounded-xl border border-gray-100 shadow-sm hover:border-indigo-200 hover:shadow p-3 cursor-pointer transition-all"
                           onClick={() => { setEditingId(item.id); setEditContent(item.content); }}
-                          className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="flex-1 text-sm leading-relaxed text-gray-800">
+                              {item.content}
+                            </span>
+                            {savingId === item.id ? (
+                              <span className="text-xs text-gray-400 flex-shrink-0 mt-0.5">保存中…</span>
+                            ) : (
+                              <svg
+                                className="w-3.5 h-3.5 text-gray-200 group-hover/card:text-gray-400 flex-shrink-0 mt-0.5 transition-colors"
+                                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-white/80 rounded"
+                          className="opacity-0 group-hover/card:opacity-100 w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-500 rounded-lg transition-all flex-shrink-0 mt-1"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
