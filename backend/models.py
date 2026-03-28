@@ -141,3 +141,13 @@ class ScheduledTodo(Base):
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WeeklyAIAnalysis(Base):
+    __tablename__ = "weekly_ai_analyses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    week_start_date = Column(Date, nullable=False)
+    analysis = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
