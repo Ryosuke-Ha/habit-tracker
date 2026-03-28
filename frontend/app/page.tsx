@@ -84,6 +84,7 @@ export default function Home() {
   const [modalLocation, setModalLocation] = useState("");
   const [isPersistentModal, setIsPersistentModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const weekdayLabel = WEEKDAY_LABELS[new Date().getDay()];
 
@@ -384,6 +385,11 @@ export default function Home() {
     | { kind: "persistent"; todo: PersistentTodo }
     | { kind: "scheduled"; todo: ScheduledTodo };
 
+  function isDone(item: UnifiedItem): boolean {
+    if (item.kind === "log") return item.log.isChecked;
+    return item.todo.is_completed;
+  }
+
   const allItems: UnifiedItem[] = [
     ...dailyLogs.map((log) => ({ kind: "log" as const, log })),
     ...persistentTodos.map((t) => ({ kind: "persistent" as const, todo: t })),
@@ -394,10 +400,8 @@ export default function Home() {
     return timeA.localeCompare(timeB);
   });
 
-  const allDoneCount = allItems.filter((item) =>
-    item.kind === "log" ? item.log.isChecked :
-    item.kind === "persistent" ? item.todo.is_completed : false
-  ).length;
+  const incompleteItems = allItems.filter((item) => !isDone(item));
+  const doneItems = allItems.filter((item) => isDone(item));
 
   return (
     <>
@@ -586,90 +590,178 @@ export default function Home() {
         ) : (
           <div>
             <p className="text-xs text-gray-400 mb-3 text-right">
-              {allDoneCount} / {allItems.length} 完了
+              {doneItems.length} / {allItems.length} 完了
             </p>
-            <ul className="flex flex-col gap-2">
-              {allItems.map((item) => {
-                if (item.kind === "log") {
-                  const { log } = item;
-                  const entry: TodoEntry = {
-                    kind: "habit",
-                    logId: log.logId,
-                    habitId: log.habitId,
-                    title: log.title,
-                    scheduledTime: log.scheduledTime,
-                    location: log.location,
-                    isChecked: log.isChecked,
-                  };
-                  return (
-                    <TodoItem
-                      key={`log-${log.logId}`}
-                      item={entry}
-                      onToggle={() => handleToggleLog(log.logId)}
-                      onDelete={() => handleDeleteLog(log.logId)}
-                      onEdit={(data) => handleEditLog(log.logId, log.habitId, data)}
-                    />
-                  );
-                } else if (item.kind === "persistent") {
-                  const { todo } = item;
-                  const entry: TodoEntry = {
-                    kind: "persistent",
-                    id: todo.id,
-                    title: todo.title,
-                    scheduledTime: todo.scheduled_time,
-                    location: todo.location,
-                    isCompleted: todo.is_completed,
-                  };
-                  return (
-                    <TodoItem
-                      key={`persistent-${todo.id}`}
-                      item={entry}
-                      onToggle={() => handleTogglePersistent(todo.id)}
-                      onDelete={() => handleDeletePersistent(todo.id)}
-                      onEdit={(data) => handleEditPersistent(todo.id, data)}
-                    />
-                  );
-                } else {
-                  const { todo } = item;
-                  return (
-                    <li
-                      key={`scheduled-${todo.id}`}
-                      className={`rounded-xl border overflow-hidden transition-colors ${todo.is_completed ? "bg-gray-50 border-gray-100" : "bg-purple-50 border-purple-200"}`}
-                    >
-                      <div className="flex items-center gap-3 p-4">
-                        <button
-                          onClick={() => handleToggleScheduledTodo(todo.id)}
-                          className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            todo.is_completed
-                              ? "bg-green-500 border-green-500 text-white"
-                              : "border-purple-300 hover:border-purple-500 hover:bg-purple-100"
-                          }`}
-                          aria-label={todo.is_completed ? "完了を取り消す" : "完了"}
-                        >
-                          {todo.is_completed && (
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <div className={`text-xs mb-0.5 flex items-center gap-2 ${todo.is_completed ? "text-gray-300" : "text-purple-400"}`}>
-                            {todo.scheduled_time && <span>🕐 {todo.scheduled_time}</span>}
-                            {todo.location && <span>📍 {todo.location}</span>}
-                          </div>
-                          <p className={`text-sm font-semibold flex items-center gap-2 ${todo.is_completed ? "text-gray-300" : "text-gray-900"}`}>
-                            <span className={`truncate ${todo.is_completed ? "line-through" : ""}`}>{todo.title}</span>
-                            {!todo.is_completed && (
+
+            {/* Incomplete items */}
+            {incompleteItems.length > 0 && (
+              <ul className="flex flex-col gap-2">
+                {incompleteItems.map((item) => {
+                  if (item.kind === "log") {
+                    const { log } = item;
+                    const entry: TodoEntry = {
+                      kind: "habit",
+                      logId: log.logId,
+                      habitId: log.habitId,
+                      title: log.title,
+                      scheduledTime: log.scheduledTime,
+                      location: log.location,
+                      isChecked: log.isChecked,
+                    };
+                    return (
+                      <TodoItem
+                        key={`log-${log.logId}`}
+                        item={entry}
+                        onToggle={() => handleToggleLog(log.logId)}
+                        onDelete={() => handleDeleteLog(log.logId)}
+                        onEdit={(data) => handleEditLog(log.logId, log.habitId, data)}
+                      />
+                    );
+                  } else if (item.kind === "persistent") {
+                    const { todo } = item;
+                    const entry: TodoEntry = {
+                      kind: "persistent",
+                      id: todo.id,
+                      title: todo.title,
+                      scheduledTime: todo.scheduled_time,
+                      location: todo.location,
+                      isCompleted: todo.is_completed,
+                    };
+                    return (
+                      <TodoItem
+                        key={`persistent-${todo.id}`}
+                        item={entry}
+                        onToggle={() => handleTogglePersistent(todo.id)}
+                        onDelete={() => handleDeletePersistent(todo.id)}
+                        onEdit={(data) => handleEditPersistent(todo.id, data)}
+                      />
+                    );
+                  } else {
+                    const { todo } = item;
+                    return (
+                      <li
+                        key={`scheduled-${todo.id}`}
+                        className="rounded-xl border overflow-hidden transition-colors bg-purple-50 border-purple-200"
+                      >
+                        <div className="flex items-center gap-3 p-4">
+                          <button
+                            onClick={() => handleToggleScheduledTodo(todo.id)}
+                            className="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors border-purple-300 hover:border-purple-500 hover:bg-purple-100"
+                            aria-label="完了"
+                          >
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs mb-0.5 flex items-center gap-2 text-purple-400">
+                              {todo.scheduled_time && <span>🕐 {todo.scheduled_time}</span>}
+                              {todo.location && <span>📍 {todo.location}</span>}
+                            </div>
+                            <p className="text-sm font-semibold flex items-center gap-2 text-gray-900">
+                              <span className="truncate">{todo.title}</span>
                               <span className="flex-shrink-0 text-xs font-semibold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">メモ</span>
-                            )}
-                          </p>
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </li>
-                  );
-                }
-              })}
-            </ul>
+                      </li>
+                    );
+                  }
+                })}
+              </ul>
+            )}
+
+            {/* Completed accordion */}
+            {doneItems.length > 0 && (
+              <div className={incompleteItems.length > 0 ? "mt-4" : ""}>
+                <button
+                  onClick={() => setDoneOpen((v) => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-150 transition-colors text-sm font-medium text-gray-500"
+                >
+                  <span>完了済み（{doneItems.length}件）</span>
+                  <svg
+                    className={`w-4 h-4 transition-transform duration-200 ${doneOpen ? "rotate-180" : ""}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div
+                  className={`overflow-hidden transition-all duration-300 ${doneOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"}`}
+                >
+                  <ul className="flex flex-col gap-2 mt-2">
+                    {doneItems.map((item) => {
+                      if (item.kind === "log") {
+                        const { log } = item;
+                        const entry: TodoEntry = {
+                          kind: "habit",
+                          logId: log.logId,
+                          habitId: log.habitId,
+                          title: log.title,
+                          scheduledTime: log.scheduledTime,
+                          location: log.location,
+                          isChecked: log.isChecked,
+                        };
+                        return (
+                          <TodoItem
+                            key={`log-${log.logId}`}
+                            item={entry}
+                            onToggle={() => handleToggleLog(log.logId)}
+                            onDelete={() => handleDeleteLog(log.logId)}
+                            onEdit={(data) => handleEditLog(log.logId, log.habitId, data)}
+                          />
+                        );
+                      } else if (item.kind === "persistent") {
+                        const { todo } = item;
+                        const entry: TodoEntry = {
+                          kind: "persistent",
+                          id: todo.id,
+                          title: todo.title,
+                          scheduledTime: todo.scheduled_time,
+                          location: todo.location,
+                          isCompleted: todo.is_completed,
+                        };
+                        return (
+                          <TodoItem
+                            key={`persistent-${todo.id}`}
+                            item={entry}
+                            onToggle={() => handleTogglePersistent(todo.id)}
+                            onDelete={() => handleDeletePersistent(todo.id)}
+                            onEdit={(data) => handleEditPersistent(todo.id, data)}
+                          />
+                        );
+                      } else {
+                        const { todo } = item;
+                        return (
+                          <li
+                            key={`scheduled-${todo.id}`}
+                            className="rounded-xl border overflow-hidden transition-colors bg-gray-50 border-gray-100"
+                          >
+                            <div className="flex items-center gap-3 p-4">
+                              <button
+                                onClick={() => handleToggleScheduledTodo(todo.id)}
+                                className="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors bg-green-500 border-green-500 text-white"
+                                aria-label="完了を取り消す"
+                              >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs mb-0.5 flex items-center gap-2 text-gray-300">
+                                  {todo.scheduled_time && <span>🕐 {todo.scheduled_time}</span>}
+                                  {todo.location && <span>📍 {todo.location}</span>}
+                                </div>
+                                <p className="text-sm font-semibold flex items-center gap-2 text-gray-300">
+                                  <span className="truncate line-through">{todo.title}</span>
+                                </p>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      }
+                    })}
+                  </ul>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
