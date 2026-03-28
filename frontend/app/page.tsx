@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import LoadingOverlay from "@/components/LoadingOverlay";
-import HabitList, { DailyLogEntry } from "@/components/HabitList";
+import { DailyLogEntry } from "@/components/HabitList";
+import TodoItem, { TodoEntry } from "@/components/TodoItem";
 import HamburgerMenu from "@/components/HamburgerMenu";
 import { useSetting } from "@/hooks/useSetting";
 
@@ -30,6 +31,15 @@ interface PersistentTodo {
   location: string | null;
   is_completed: boolean;
   completed_at: string | null;
+}
+
+interface ScheduledTodo {
+  id: number;
+  title: string;
+  scheduled_date: string;
+  scheduled_time: string | null;
+  location: string | null;
+  is_completed: boolean;
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -61,6 +71,7 @@ export default function Home() {
   const [templateName, setTemplateName] = useState<string>("");
   const [dailyLogs, setDailyLogs] = useState<DailyLogEntry[]>([]);
   const [persistentTodos, setPersistentTodos] = useState<PersistentTodo[]>([]);
+  const [scheduledTodos, setScheduledTodos] = useState<ScheduledTodo[]>([]);
   const [tryItems, setTryItems] = useState<TryItem[]>([]);
   const [tryStatus, setTryStatus] = useState<"no_review" | "no_items" | "has_items">("no_review");
   const [monthlyGoal, setMonthlyGoal] = useState("");
@@ -131,11 +142,12 @@ export default function Home() {
       setTemplateId(matched.id);
       setTemplateName(matched.name);
 
-      const [logsRes, tryRes, goalRes, persistentRes] = await Promise.all([
+      const [logsRes, tryRes, goalRes, persistentRes, scheduledRes] = await Promise.all([
         fetch(`${API}/logs/today?template_id=${matched.id}`),
         email ? fetch(`${API}/reviews/weekly/current/try-items`, { headers: authHeaders }) : Promise.resolve(null),
         email ? fetch(`${API}/reviews/monthly/current/goal`, { headers: authHeaders }) : Promise.resolve(null),
         email ? fetch(`${API}/persistent-todos`, { headers: authHeaders }) : Promise.resolve(null),
+        email ? fetch(`${API}/scheduled-todos/today`, { headers: authHeaders }) : Promise.resolve(null),
       ]);
 
       const logsData: LogApiResponse[] = await logsRes.json();
@@ -169,6 +181,11 @@ export default function Home() {
       if (persistentRes?.ok) {
         const pData: PersistentTodo[] = await persistentRes.json();
         setPersistentTodos(pData);
+      }
+
+      if (scheduledRes?.ok) {
+        const sData: ScheduledTodo[] = await scheduledRes.json();
+        setScheduledTodos(sData);
       }
     } finally {
       setDataReady(true);
@@ -324,6 +341,22 @@ export default function Home() {
     }
   }
 
+  async function handleToggleScheduledTodo(id: number) {
+    const email = session?.user?.email;
+    if (!email) return;
+    const prev = scheduledTodos.find((t) => t.id === id);
+    if (!prev) return;
+    setScheduledTodos((list) => list.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t)));
+    try {
+      await fetch(`${API}/scheduled-todos/${id}/toggle`, {
+        method: "POST",
+        headers: { "X-User-Email": email },
+      });
+    } catch {
+      setScheduledTodos((list) => list.map((t) => (t.id === id ? prev : t)));
+    }
+  }
+
   function handleEditPersistent(id: number, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
     const email = session?.user?.email;
     if (!email) return Promise.resolve();
@@ -345,6 +378,26 @@ export default function Home() {
       });
     return Promise.resolve();
   }
+
+  type UnifiedItem =
+    | { kind: "log"; log: DailyLogEntry }
+    | { kind: "persistent"; todo: PersistentTodo }
+    | { kind: "scheduled"; todo: ScheduledTodo };
+
+  const allItems: UnifiedItem[] = [
+    ...dailyLogs.map((log) => ({ kind: "log" as const, log })),
+    ...persistentTodos.map((t) => ({ kind: "persistent" as const, todo: t })),
+    ...scheduledTodos.map((t) => ({ kind: "scheduled" as const, todo: t })),
+  ].sort((a, b) => {
+    const timeA = a.kind === "log" ? a.log.scheduledTime : (a.todo.scheduled_time ?? "99:99");
+    const timeB = b.kind === "log" ? b.log.scheduledTime : (b.todo.scheduled_time ?? "99:99");
+    return timeA.localeCompare(timeB);
+  });
+
+  const allDoneCount = allItems.filter((item) =>
+    item.kind === "log" ? item.log.isChecked :
+    item.kind === "persistent" ? item.todo.is_completed : false
+  ).length;
 
   return (
     <>
@@ -460,6 +513,7 @@ export default function Home() {
               user={session?.user}
               onSignOut={() => signOut({ callbackUrl: "/login" })}
               items={[
+                { label: "TODOメモ", onClick: () => router.push("/memo"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg> },
                 { label: "テンプレートを管理", onClick: () => router.push("/templates"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg> },
                 { label: "週の振り返り", onClick: () => router.push("/review/weekly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
                 { label: "月の振り返り", onClick: () => router.push("/review/monthly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
@@ -525,16 +579,99 @@ export default function Home() {
           TODOを追加
         </button>
 
-        <HabitList
-          dailyLogs={dailyLogs}
-          persistentTodos={persistentTodos}
-          onToggleLog={handleToggleLog}
-          onDeleteLog={handleDeleteLog}
-          onEditLog={handleEditLog}
-          onTogglePersistent={handleTogglePersistent}
-          onDeletePersistent={handleDeletePersistent}
-          onEditPersistent={handleEditPersistent}
-        />
+        {allItems.length === 0 ? (
+          <p className="text-center text-gray-400 py-8 text-sm">
+            TODOがまだありません。上の「+ TODOを追加」から追加してください。
+          </p>
+        ) : (
+          <div>
+            <p className="text-xs text-gray-400 mb-3 text-right">
+              {allDoneCount} / {allItems.length} 完了
+            </p>
+            <ul className="flex flex-col gap-2">
+              {allItems.map((item) => {
+                if (item.kind === "log") {
+                  const { log } = item;
+                  const entry: TodoEntry = {
+                    kind: "habit",
+                    logId: log.logId,
+                    habitId: log.habitId,
+                    title: log.title,
+                    scheduledTime: log.scheduledTime,
+                    location: log.location,
+                    isChecked: log.isChecked,
+                  };
+                  return (
+                    <TodoItem
+                      key={`log-${log.logId}`}
+                      item={entry}
+                      onToggle={() => handleToggleLog(log.logId)}
+                      onDelete={() => handleDeleteLog(log.logId)}
+                      onEdit={(data) => handleEditLog(log.logId, log.habitId, data)}
+                    />
+                  );
+                } else if (item.kind === "persistent") {
+                  const { todo } = item;
+                  const entry: TodoEntry = {
+                    kind: "persistent",
+                    id: todo.id,
+                    title: todo.title,
+                    scheduledTime: todo.scheduled_time,
+                    location: todo.location,
+                    isCompleted: todo.is_completed,
+                  };
+                  return (
+                    <TodoItem
+                      key={`persistent-${todo.id}`}
+                      item={entry}
+                      onToggle={() => handleTogglePersistent(todo.id)}
+                      onDelete={() => handleDeletePersistent(todo.id)}
+                      onEdit={(data) => handleEditPersistent(todo.id, data)}
+                    />
+                  );
+                } else {
+                  const { todo } = item;
+                  return (
+                    <li
+                      key={`scheduled-${todo.id}`}
+                      className={`rounded-xl border overflow-hidden transition-colors ${todo.is_completed ? "bg-gray-50 border-gray-100" : "bg-purple-50 border-purple-200"}`}
+                    >
+                      <div className="flex items-center gap-3 p-4">
+                        <button
+                          onClick={() => handleToggleScheduledTodo(todo.id)}
+                          className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                            todo.is_completed
+                              ? "bg-green-500 border-green-500 text-white"
+                              : "border-purple-300 hover:border-purple-500 hover:bg-purple-100"
+                          }`}
+                          aria-label={todo.is_completed ? "完了を取り消す" : "完了"}
+                        >
+                          {todo.is_completed && (
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-xs mb-0.5 flex items-center gap-2 ${todo.is_completed ? "text-gray-300" : "text-purple-400"}`}>
+                            {todo.scheduled_time && <span>🕐 {todo.scheduled_time}</span>}
+                            {todo.location && <span>📍 {todo.location}</span>}
+                          </div>
+                          <p className={`text-sm font-semibold flex items-center gap-2 ${todo.is_completed ? "text-gray-300" : "text-gray-900"}`}>
+                            <span className={`truncate ${todo.is_completed ? "line-through" : ""}`}>{todo.title}</span>
+                            {!todo.is_completed && (
+                              <span className="flex-shrink-0 text-xs font-semibold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">メモ</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                }
+              })}
+            </ul>
+          </div>
+        )}
       </main>
     </>
   );

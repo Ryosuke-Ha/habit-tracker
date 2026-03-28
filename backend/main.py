@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import models
 from database import SessionLocal, engine
-from routers import habits, monthly_reviews, persistent_todos, reviews, settings, subtasks, templates
+from routers import habits, monthly_reviews, persistent_todos, reviews, scheduled_todos, settings, subtasks, templates
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -26,6 +26,7 @@ app.include_router(habits.router)
 app.include_router(reviews.router)
 app.include_router(monthly_reviews.router)
 app.include_router(persistent_todos.router)
+app.include_router(scheduled_todos.router)
 app.include_router(subtasks.router)
 app.include_router(settings.router)
 

@@ -126,3 +126,18 @@ class KPTItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     review = relationship("WeeklyReview", back_populates="kpt_items")
+
+
+class ScheduledTodo(Base):
+    __tablename__ = "scheduled_todos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    scheduled_date = Column(Date, nullable=False)
+    scheduled_time = Column(String, nullable=True)
+    location = Column(String, nullable=True, default="")
+    is_completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
