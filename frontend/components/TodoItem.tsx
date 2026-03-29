@@ -41,7 +41,16 @@ export interface PersistentEntry {
   isCompleted: boolean;
 }
 
-export type TodoEntry = HabitEntry | PersistentEntry;
+export interface ScheduledEntry {
+  kind: "scheduled";
+  id: number;
+  title: string;
+  scheduledTime: string | null;
+  location: string | null;
+  isCompleted: boolean;
+}
+
+export type TodoEntry = HabitEntry | PersistentEntry | ScheduledEntry;
 
 interface TodoItemProps {
   item: TodoEntry;
@@ -86,7 +95,7 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
   const prevIsDoneRef = useRef<boolean>(false);
 
   const isDone = item.kind === "habit" ? item.isChecked : item.isCompleted;
-  const subtaskType = item.kind === "habit" ? "habit_log" : "persistent_todo";
+  const subtaskType = item.kind === "habit" ? "habit_log" : item.kind === "scheduled" ? "scheduled_todo" : "persistent_todo";
   const subtaskTodoId = item.kind === "habit" ? item.logId : item.id;
 
   const completedCount = subtasks.filter((s) => s.is_completed).length;
@@ -236,6 +245,8 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
           ? "animate-row-complete-flash"
           : isDone
           ? "bg-gray-50 border-gray-100"
+          : item.kind === "scheduled"
+          ? "bg-purple-50 border-purple-200"
           : item.kind === "persistent"
           ? "bg-amber-50 border-amber-300"
           : "bg-white border-gray-200"
@@ -288,8 +299,11 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
             {item.scheduledTime && <span>🕐 {item.scheduledTime}</span>}
             {item.location && <span>📍 {item.location}</span>}
           </div>
-          <p className={`text-sm font-semibold ${isDone ? "text-gray-300 line-through" : "text-gray-900"}`}>
+          <p className={`text-sm font-semibold flex items-center gap-1.5 ${isDone ? "text-gray-300 line-through" : "text-gray-900"}`}>
             {item.title}
+            {item.kind === "scheduled" && !isDone && (
+              <span className="flex-shrink-0 text-xs font-semibold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">メモ</span>
+            )}
           </p>
           {/* Subtask summary badge (collapsed) */}
           {!expanded && subtasksLoaded && totalCount > 0 && (

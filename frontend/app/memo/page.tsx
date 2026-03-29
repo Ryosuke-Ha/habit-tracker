@@ -19,6 +19,13 @@ interface ScheduledTodo {
   updated_at: string;
 }
 
+interface SubTask {
+  id: number;
+  title: string;
+  is_completed: boolean;
+  order: number;
+}
+
 function generateTimeOptions(): string[] {
   const times: string[] = [];
   for (let h = 0; h < 24; h++) {
@@ -44,6 +51,12 @@ export default function MemoPage() {
 
   const [todos, setTodos] = useState<ScheduledTodo[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Subtask state
+  const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({});
+  const [subtasksMap, setSubtasksMap] = useState<Record<number, SubTask[]>>({});
+  const [subtasksLoadedSet, setSubtasksLoadedSet] = useState<Record<number, boolean>>({});
+  const [newSubtaskTitles, setNewSubtaskTitles] = useState<Record<number, string>>({});
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -169,6 +182,97 @@ export default function MemoPage() {
     }
   }
 
+  // Subtask handlers
+  async function handleToggleExpand(id: number) {
+    const nowOpen = !expandedIds[id];
+    setExpandedIds((prev) => ({ ...prev, [id]: nowOpen }));
+    if (nowOpen && !subtasksLoadedSet[id]) {
+      const email = session?.user?.email;
+      if (!email) return;
+      try {
+        const res = await fetch(`${API}/subtasks?todo_type=scheduled_todo&todo_id=${id}`, {
+          headers: { "X-User-Email": email },
+        });
+        if (res.ok) {
+          const data: SubTask[] = await res.json();
+          setSubtasksMap((prev) => ({ ...prev, [id]: data }));
+          setSubtasksLoadedSet((prev) => ({ ...prev, [id]: true }));
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  async function handleAddSubtask(todoId: number) {
+    const title = (newSubtaskTitles[todoId] ?? "").trim();
+    if (!title) return;
+    const email = session?.user?.email;
+    if (!email) return;
+    setNewSubtaskTitles((prev) => ({ ...prev, [todoId]: "" }));
+    const tempId = -Date.now();
+    const optimistic: SubTask = { id: tempId, title, is_completed: false, order: (subtasksMap[todoId] ?? []).length };
+    setSubtasksMap((prev) => ({ ...prev, [todoId]: [...(prev[todoId] ?? []), optimistic] }));
+    try {
+      const res = await fetch(`${API}/subtasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        body: JSON.stringify({ todo_type: "scheduled_todo", todo_id: todoId, title }),
+      });
+      if (res.ok) {
+        const created: SubTask = await res.json();
+        setSubtasksMap((prev) => ({
+          ...prev,
+          [todoId]: (prev[todoId] ?? []).map((s) => (s.id === tempId ? created : s)),
+        }));
+      } else {
+        setSubtasksMap((prev) => ({ ...prev, [todoId]: (prev[todoId] ?? []).filter((s) => s.id !== tempId) }));
+      }
+    } catch {
+      setSubtasksMap((prev) => ({ ...prev, [todoId]: (prev[todoId] ?? []).filter((s) => s.id !== tempId) }));
+    }
+  }
+
+  async function handleToggleSubtask(todoId: number, subtaskId: number) {
+    const email = session?.user?.email;
+    if (!email) return;
+    const prev = subtasksMap[todoId] ?? [];
+    const updated = prev.map((s) => (s.id === subtaskId ? { ...s, is_completed: !s.is_completed } : s));
+    setSubtasksMap((m) => ({ ...m, [todoId]: updated }));
+    try {
+      const res = await fetch(`${API}/subtasks/${subtaskId}/toggle`, {
+        method: "POST",
+        headers: { "X-User-Email": email },
+      });
+      if (res.ok) {
+        const data: SubTask = await res.json();
+        setSubtasksMap((m) => ({ ...m, [todoId]: (m[todoId] ?? []).map((s) => (s.id === subtaskId ? data : s)) }));
+      } else {
+        setSubtasksMap((m) => ({ ...m, [todoId]: prev }));
+      }
+    } catch {
+      setSubtasksMap((m) => ({ ...m, [todoId]: prev }));
+    }
+  }
+
+  async function handleDeleteSubtask(todoId: number, subtaskId: number) {
+    const email = session?.user?.email;
+    if (!email) return;
+    const prev = subtasksMap[todoId] ?? [];
+    setSubtasksMap((m) => ({ ...m, [todoId]: prev.filter((s) => s.id !== subtaskId) }));
+    try {
+      const res = await fetch(`${API}/subtasks/${subtaskId}`, {
+        method: "DELETE",
+        headers: { "X-User-Email": email },
+      });
+      if (!res.ok && res.status !== 204) {
+        setSubtasksMap((m) => ({ ...m, [todoId]: prev }));
+      }
+    } catch {
+      setSubtasksMap((m) => ({ ...m, [todoId]: prev }));
+    }
+  }
+
   // Group todos by past / today / future
   const todayStr = getTodayStr();
   const past = todos.filter((t) => t.scheduled_date < todayStr);
@@ -181,43 +285,127 @@ export default function MemoPage() {
   }
 
   function renderTodoItem(todo: ScheduledTodo) {
+    const isExpanded = !!expandedIds[todo.id];
+    const subtasks = subtasksMap[todo.id] ?? [];
+    const subtaskCount = subtasksLoadedSet[todo.id] ? subtasks.length : 0;
+    const newTitle = newSubtaskTitles[todo.id] ?? "";
+
     return (
       <div
         key={todo.id}
-        className={`flex items-center gap-3 p-3 rounded-xl border ${todo.is_completed ? "bg-gray-50 border-gray-100 opacity-50" : "bg-white border-gray-200"}`}
+        className={`rounded-xl border overflow-hidden ${todo.is_completed ? "bg-gray-50 border-gray-100 opacity-50" : "bg-white border-gray-200"}`}
       >
-        <div className="flex-1 min-w-0">
-          {(todo.scheduled_time || todo.location) && (
-            <p className="text-xs text-gray-400 mb-0.5">
-              {todo.scheduled_time ? `🕐 ${todo.scheduled_time}` : ""}
-              {todo.scheduled_time && todo.location ? "  " : ""}
-              {todo.location ? `📍 ${todo.location}` : ""}
-            </p>
+        {/* Card header — clickable to toggle accordion */}
+        <div
+          className="flex items-center gap-3 p-3 cursor-pointer select-none"
+          onClick={() => handleToggleExpand(todo.id)}
+        >
+          <div className="flex-1 min-w-0">
+            {(todo.scheduled_time || todo.location) && (
+              <p className="text-xs text-gray-400 mb-0.5">
+                {todo.scheduled_time ? `🕐 ${todo.scheduled_time}` : ""}
+                {todo.scheduled_time && todo.location ? "  " : ""}
+                {todo.location ? `📍 ${todo.location}` : ""}
+              </p>
+            )}
+            <div className="flex items-center gap-2 min-w-0">
+              <p className={`text-sm font-medium truncate ${todo.is_completed ? "line-through text-gray-400" : "text-gray-800"}`}>
+                {todo.title}
+              </p>
+              {!isExpanded && subtasksLoadedSet[todo.id] && subtaskCount > 0 && (
+                <span className="flex-shrink-0 text-xs font-semibold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">
+                  {subtaskCount}
+                </span>
+              )}
+            </div>
+          </div>
+          {!todo.is_completed && (
+            <button
+              onClick={(e) => { e.stopPropagation(); openEditModal(todo); }}
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="編集"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
           )}
-          <p className={`text-sm font-medium truncate ${todo.is_completed ? "line-through text-gray-400" : "text-gray-800"}`}>
-            {todo.title}
-          </p>
-        </div>
-        {!todo.is_completed && (
           <button
-            onClick={() => openEditModal(todo)}
-            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            aria-label="編集"
+            onClick={(e) => { e.stopPropagation(); handleDelete(todo.id); }}
+            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            aria-label="削除"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
-        )}
-        <button
-          onClick={() => handleDelete(todo.id)}
-          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-          aria-label="削除"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          {/* Chevron */}
+          <svg
+            className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
-        </button>
+        </div>
+
+        {/* Accordion body */}
+        <div className={`transition-all duration-200 overflow-hidden ${isExpanded ? "max-h-[500px]" : "max-h-0"}`}>
+          <div className="px-3 pb-3 border-t border-gray-100">
+            {/* Subtask list */}
+            {subtasks.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {subtasks.map((sub) => (
+                  <li key={sub.id} className="flex items-center gap-2 group">
+                    <button
+                      onClick={() => handleToggleSubtask(todo.id, sub.id)}
+                      className={`w-4 h-4 flex-shrink-0 rounded border transition-colors ${sub.is_completed ? "bg-purple-500 border-purple-500" : "border-gray-300 hover:border-purple-400"}`}
+                      aria-label={sub.is_completed ? "未完了に戻す" : "完了にする"}
+                    >
+                      {sub.is_completed && (
+                        <svg className="w-full h-full text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                    <span className={`flex-1 text-xs ${sub.is_completed ? "line-through text-gray-400" : "text-gray-700"}`}>
+                      {sub.title}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteSubtask(todo.id, sub.id)}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-400 transition-opacity"
+                      aria-label="削除"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {/* Add subtask input */}
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewSubtaskTitles((prev) => ({ ...prev, [todo.id]: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(todo.id); } }}
+                placeholder="サブタスクを追加..."
+                className="flex-1 text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-300 placeholder-gray-300"
+              />
+              <button
+                onClick={() => handleAddSubtask(todo.id)}
+                disabled={!newTitle.trim()}
+                className="p-1.5 text-purple-500 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="追加"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

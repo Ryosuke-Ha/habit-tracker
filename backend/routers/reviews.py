@@ -1,6 +1,12 @@
 import datetime
 from typing import List, Optional
 
+_JST = datetime.timezone(datetime.timedelta(hours=9))
+
+
+def get_today_jst() -> datetime.date:
+    return datetime.datetime.now(tz=_JST).date()
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -95,7 +101,7 @@ def get_current_try_items(
     - 200 + []: review exists but has no Try items
     - 200 + [...]: review exists with Try items
     """
-    today = datetime.date.today()
+    today = get_today_jst()
     this_week_start = get_week_start(today)
     last_week_start = this_week_start - datetime.timedelta(days=7)
     review = (
@@ -113,7 +119,7 @@ def get_current_review(
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
 ):
-    today = datetime.date.today()
+    today = get_today_jst()
     week_start = get_week_start(today)
     return get_or_create_review(db, user_email, week_start)
 

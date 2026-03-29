@@ -358,6 +358,40 @@ export default function Home() {
     }
   }
 
+  async function handleDeleteScheduledTodo(id: number) {
+    const email = session?.user?.email;
+    if (!email) return;
+    const prevTodos = scheduledTodos;
+    setScheduledTodos((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await fetch(`${API}/scheduled-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+    } catch {
+      setScheduledTodos(prevTodos);
+    }
+  }
+
+  function handleEditScheduledTodo(id: number, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
+    const email = session?.user?.email;
+    if (!email) return Promise.resolve();
+    const prevTodo = scheduledTodos.find((t) => t.id === id);
+    setScheduledTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, title: data.title, scheduled_time: data.scheduled_time || null, location: data.location || null } : t))
+    );
+    fetch(`${API}/scheduled-todos/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-User-Email": email },
+      body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time || null, location: data.location }),
+    })
+      .then((r) => r.json())
+      .then((updated: ScheduledTodo) => {
+        setScheduledTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, title: updated.title, scheduled_time: updated.scheduled_time, location: updated.location } : t)));
+      })
+      .catch(() => {
+        if (prevTodo) setScheduledTodos((prev) => prev.map((t) => (t.id === id ? prevTodo : t)));
+      });
+    return Promise.resolve();
+  }
+
   function handleEditPersistent(id: number, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
     const email = session?.user?.email;
     if (!email) return Promise.resolve();
@@ -638,30 +672,22 @@ export default function Home() {
                     );
                   } else {
                     const { todo } = item;
+                    const entry: TodoEntry = {
+                      kind: "scheduled",
+                      id: todo.id,
+                      title: todo.title,
+                      scheduledTime: todo.scheduled_time,
+                      location: todo.location,
+                      isCompleted: todo.is_completed,
+                    };
                     return (
-                      <li
+                      <TodoItem
                         key={`scheduled-${todo.id}`}
-                        className="rounded-xl border overflow-hidden transition-colors bg-purple-50 border-purple-200"
-                      >
-                        <div className="flex items-center gap-3 p-4">
-                          <button
-                            onClick={() => handleToggleScheduledTodo(todo.id)}
-                            className="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors border-purple-300 hover:border-purple-500 hover:bg-purple-100"
-                            aria-label="完了"
-                          >
-                          </button>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs mb-0.5 flex items-center gap-2 text-purple-400">
-                              {todo.scheduled_time && <span>🕐 {todo.scheduled_time}</span>}
-                              {todo.location && <span>📍 {todo.location}</span>}
-                            </div>
-                            <p className="text-sm font-semibold flex items-center gap-2 text-gray-900">
-                              <span className="truncate">{todo.title}</span>
-                              <span className="flex-shrink-0 text-xs font-semibold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">メモ</span>
-                            </p>
-                          </div>
-                        </div>
-                      </li>
+                        item={entry}
+                        onToggle={() => handleToggleScheduledTodo(todo.id)}
+                        onDelete={() => handleDeleteScheduledTodo(todo.id)}
+                        onEdit={(data) => handleEditScheduledTodo(todo.id, data)}
+                      />
                     );
                   }
                 })}
@@ -729,32 +755,22 @@ export default function Home() {
                         );
                       } else {
                         const { todo } = item;
+                        const entry: TodoEntry = {
+                          kind: "scheduled",
+                          id: todo.id,
+                          title: todo.title,
+                          scheduledTime: todo.scheduled_time,
+                          location: todo.location,
+                          isCompleted: todo.is_completed,
+                        };
                         return (
-                          <li
+                          <TodoItem
                             key={`scheduled-${todo.id}`}
-                            className="rounded-xl border overflow-hidden transition-colors bg-gray-50 border-gray-100"
-                          >
-                            <div className="flex items-center gap-3 p-4">
-                              <button
-                                onClick={() => handleToggleScheduledTodo(todo.id)}
-                                className="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors bg-green-500 border-green-500 text-white"
-                                aria-label="完了を取り消す"
-                              >
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              </button>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs mb-0.5 flex items-center gap-2 text-gray-300">
-                                  {todo.scheduled_time && <span>🕐 {todo.scheduled_time}</span>}
-                                  {todo.location && <span>📍 {todo.location}</span>}
-                                </div>
-                                <p className="text-sm font-semibold flex items-center gap-2 text-gray-300">
-                                  <span className="truncate line-through">{todo.title}</span>
-                                </p>
-                              </div>
-                            </div>
-                          </li>
+                            item={entry}
+                            onToggle={() => handleToggleScheduledTodo(todo.id)}
+                            onDelete={() => handleDeleteScheduledTodo(todo.id)}
+                            onEdit={(data) => handleEditScheduledTodo(todo.id, data)}
+                          />
                         );
                       }
                     })}
