@@ -1,18 +1,19 @@
 import datetime
 from typing import List, Optional
 
-_JST = datetime.timezone(datetime.timedelta(hours=9))
-
-
-def get_today_jst() -> datetime.date:
-    return datetime.datetime.now(tz=_JST).date()
-
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import models
 from database import SessionLocal
+
+_JST = datetime.timezone(datetime.timedelta(hours=9))
+
+
+def get_today_jst() -> datetime.date:
+    return datetime.datetime.now(tz=_JST).date()
+
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 
