@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optimistic UI for habit deletion on the templates page with rollback on failure
 - Saving indicator (`savingId`) for KPT item edits on the weekly review page
 - Collapsible "completed items" accordion on the daily TODO dashboard — done items are grouped into a toggleable section instead of being shown inline
+- Smart default time for new TODO items — time field now defaults to the next upcoming 30-minute interval instead of a fixed value
 
 ### Changed
 
@@ -34,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Monthly review "Next month's goal" section is now always visible and editable regardless of whether the month is in the past or future (read-only restriction removed)
 - Header layout on weekly review, monthly review, and templates pages changed to `justify-between` to accommodate the hamburger menu on the right
 - Daily TODO list now separates incomplete and completed items — incomplete items are shown first, completed items are hidden behind a collapsible "完了済み" accordion that defaults to collapsed
+- Past and future scheduled TODO sections on the memo page now group items by date, displaying a single date header per group instead of repeating the date for each item
+- Editing a scheduled TODO on the memo page now defaults the time field to the next 30-minute interval when the todo has no saved time, instead of leaving it empty
 
 ### Fixed
 
