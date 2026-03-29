@@ -1,3 +1,4 @@
+import calendar
 import datetime
 import os
 from typing import Optional
@@ -178,6 +179,173 @@ def generate_analysis(
     record = models.WeeklyAIAnalysis(
         user_id=user_email,
         week_start_date=week_start,
+        analysis=analysis_text,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+# ---- Monthly AI Analysis ----
+
+@router.get("/monthly/{year_month}/analysis", response_model=AIAnalysisOut)
+def get_monthly_analysis(
+    year_month: str,
+    db: Session = Depends(get_db),
+    user_email: str = Depends(require_user),
+):
+    try:
+        parts = year_month.split("-")
+        if len(parts) != 2:
+            raise ValueError
+        datetime.date(int(parts[0]), int(parts[1]), 1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
+
+    record = (
+        db.query(models.MonthlyAIAnalysis)
+        .filter_by(user_id=user_email, year_month=year_month)
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    return record
+
+
+@router.post("/monthly/{year_month}/analysis/generate", response_model=AIAnalysisOut)
+def generate_monthly_analysis(
+    year_month: str,
+    db: Session = Depends(get_db),
+    user_email: str = Depends(require_user),
+):
+    try:
+        year, month = map(int, year_month.split("-"))
+        datetime.date(year, month, 1)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
+
+    # 既に生成済みなら 409
+    existing = (
+        db.query(models.MonthlyAIAnalysis)
+        .filter_by(user_id=user_email, year_month=year_month)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Analysis already exists for this month")
+
+    first_day = datetime.date(year, month, 1)
+    last_day = datetime.date(year, month, calendar.monthrange(year, month)[1])
+    today = datetime.date.today()
+    calc_until = min(last_day, today)
+
+    # 月内のDailyLogsを取得
+    from collections import defaultdict
+    logs = (
+        db.query(models.DailyLog)
+        .filter(
+            models.DailyLog.date >= first_day,
+            models.DailyLog.date <= last_day,
+            models.DailyLog.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    )
+
+    # 日ごとに集計
+    date_logs: dict[datetime.date, list] = defaultdict(list)
+    for log in logs:
+        date_logs[log.date].append(log)
+
+    daily_data: list[tuple[str, int, int]] = []  # (date_str, checked, total)
+    d = first_day
+    while d <= calc_until:
+        day_logs = date_logs[d]
+        total = len(day_logs)
+        checked = sum(1 for l in day_logs if l.is_checked)
+        daily_data.append((d.isoformat(), checked, total))
+        d += datetime.timedelta(days=1)
+
+    # 全体達成率
+    total_all = sum(t for _, _, t in daily_data)
+    checked_all = sum(c for _, c, _ in daily_data)
+    overall_rate = round(checked_all / total_all * 100) if total_all > 0 else 0
+
+    # 週ごとの達成率
+    week_buckets: dict[datetime.date, list[tuple[int, int]]] = defaultdict(list)
+    for date_str, checked, total in daily_data:
+        dr_date = datetime.date.fromisoformat(date_str)
+        days_since_sunday = (dr_date.weekday() + 1) % 7
+        week_sun = dr_date - datetime.timedelta(days=days_since_sunday)
+        week_buckets[week_sun].append((checked, total))
+
+    weekly_rates_text = ""
+    for week_sun in sorted(week_buckets):
+        bucket = week_buckets[week_sun]
+        w_total = sum(t for _, t in bucket)
+        w_checked = sum(c for c, _ in bucket)
+        pct = round(w_checked / w_total * 100) if w_total > 0 else 0
+        weekly_rates_text += f"・{week_sun.strftime('%m/%d')}週: {pct}%\n"
+
+    # 連続達成日数
+    streak = 0
+    check_d = calc_until
+    while check_d >= first_day:
+        day_logs = date_logs[check_d]
+        if any(l.is_checked for l in day_logs):
+            streak += 1
+        else:
+            break
+        check_d -= datetime.timedelta(days=1)
+
+    # 達成率50%以下の日
+    low_days = [
+        f"{date_str}（{round(c/t*100)}%）"
+        for date_str, c, t in daily_data
+        if t > 0 and c / t <= 0.5
+    ]
+    low_achievement_text = "、".join(low_days) if low_days else "なし"
+
+    # プロンプト組み立て
+    user_message = f"""以下は{year_month}の習慣達成データです。
+
+【月全体の達成率】{overall_rate}%
+【連続達成日数】{streak}日
+
+【週ごとの達成率】
+{weekly_rates_text.strip()}
+
+【日ごとの達成率（低い日のみ抜粋）】
+達成率が50%以下の日: {low_achievement_text}
+
+以下を簡潔に教えてください（各項目2〜3行以内）:
+1. 今月の達成率への評価
+2. 達成率が低い時期・曜日のパターンと改善ヒント
+3. 連続達成日数へのフィードバック
+4. 来月に向けての一言
+"""
+
+    # Claude API呼び出し
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured")
+
+    client = anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=1500,
+        system="""あなたはAtomic Habitsの専門家として、ユーザーの月次習慣データを分析するコーチです。
+簡潔で実践的なフィードバックを日本語で提供してください。
+テーブル形式は使わず、箇条書きと短い文章で回答してください。
+全体で400文字以内に収めてください。""",
+        messages=[{"role": "user", "content": user_message}],
+    )
+
+    analysis_text = message.content[0].text
+
+    # DBに保存
+    record = models.MonthlyAIAnalysis(
+        user_id=user_email,
+        year_month=year_month,
         analysis=analysis_text,
     )
     db.add(record)

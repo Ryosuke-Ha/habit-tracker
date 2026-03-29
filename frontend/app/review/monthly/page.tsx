@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   BarChart,
   Bar,
@@ -98,6 +100,10 @@ export default function MonthlyReviewPage() {
   const [saved, setSaved] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [aiCreatedAt, setAiCreatedAt] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
   const todayYM = getCurrentYearMonth();
   const isPast = currentYM < todayYM;
   const isFuture = currentYM > todayYM;
@@ -115,12 +121,15 @@ export default function MonthlyReviewPage() {
   async function loadData() {
     setLoading(true);
     setSaved(false);
+    setAiAnalysis(null);
+    setAiCreatedAt(null);
     const email = session!.user!.email!;
     const h = { "X-User-Email": email };
     try {
-      const [reviewRes, statsRes] = await Promise.all([
+      const [reviewRes, statsRes, analysisRes] = await Promise.all([
         fetch(`${API}/reviews/monthly/${currentYM}`, { headers: h }),
         fetch(`${API}/reviews/monthly/${currentYM}/stats`, { headers: h }),
+        fetch(`${API}/reviews/monthly/${currentYM}/analysis`, { headers: h }),
       ]);
       const reviewData: MonthlyReview = await reviewRes.json();
       setReview(reviewData);
@@ -130,8 +139,33 @@ export default function MonthlyReviewPage() {
         const statsData: MonthlyStats = await statsRes.json();
         setStats(statsData);
       }
+
+      if (analysisRes.ok) {
+        const analysisData: { analysis: string; created_at: string } = await analysisRes.json();
+        setAiAnalysis(analysisData.analysis);
+        setAiCreatedAt(analysisData.created_at);
+      }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGenerateAnalysis() {
+    const email = session!.user!.email!;
+    if (isGenerating) return;
+    setIsGenerating(true);
+    try {
+      const res = await fetch(
+        `${API}/reviews/monthly/${currentYM}/analysis/generate`,
+        { method: "POST", headers: { "X-User-Email": email } }
+      );
+      if (res.ok) {
+        const data: { analysis: string; created_at: string } = await res.json();
+        setAiAnalysis(data.analysis);
+        setAiCreatedAt(data.created_at);
+      }
+    } finally {
+      setIsGenerating(false);
     }
   }
 
@@ -153,6 +187,7 @@ export default function MonthlyReviewPage() {
   }
 
   const overallPct = stats ? Math.round(stats.overall_rate * 100) : null;
+  const hasStats = stats !== null && stats.daily_rates.length > 0;
 
   if (status === "loading" || loading) {
     return (
@@ -313,6 +348,56 @@ export default function MonthlyReviewPage() {
 
         {(!stats || stats.daily_rates.length === 0) && (
           <p className="text-sm text-gray-400 italic text-center py-4">この月のログデータがありません</p>
+        )}
+      </div>
+
+      {/* ---- AI分析セクション ---- */}
+      <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+        <p className="text-xs font-semibold text-indigo-700 mb-3 uppercase tracking-wide">
+          ✨ AI コーチからのフィードバック
+        </p>
+
+        {aiAnalysis ? (
+          <>
+            <div className="prose prose-sm max-w-none prose-headings:text-indigo-800 prose-headings:font-bold prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-800 mb-4">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiAnalysis}</ReactMarkdown>
+            </div>
+            <button
+              disabled
+              className="w-full py-2 text-sm font-medium text-indigo-400 border border-indigo-200 rounded-xl opacity-50 cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              ✨ AIで分析する
+            </button>
+            <p className="text-xs text-gray-400 mt-1.5 text-center">
+              {new Date(aiCreatedAt!).toLocaleString("ja-JP")}に生成済み
+            </p>
+          </>
+        ) : (
+          <>
+            {isGenerating && (
+              <p className="text-sm text-indigo-600 text-center mb-3">
+                分析中...少々お待ちください
+              </p>
+            )}
+            <button
+              onClick={handleGenerateAnalysis}
+              disabled={!hasStats || isGenerating}
+              title={!hasStats ? "達成率データがありません" : undefined}
+              className="w-full py-2.5 text-sm font-medium text-indigo-600 border border-indigo-300 rounded-xl hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            >
+              {isGenerating ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  分析中...
+                </>
+              ) : (
+                <>✨ AIで分析する</>
+              )}
+            </button>
+          </>
         )}
       </div>
 

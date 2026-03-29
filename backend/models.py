@@ -151,3 +151,13 @@ class WeeklyAIAnalysis(Base):
     week_start_date = Column(Date, nullable=False)
     analysis = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class MonthlyAIAnalysis(Base):
+    __tablename__ = "monthly_ai_analyses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    year_month = Column(String, nullable=False)   # "YYYY-MM"
+    analysis = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
