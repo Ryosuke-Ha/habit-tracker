@@ -37,6 +37,17 @@ function generateTimeOptions(): string[] {
 }
 const TIME_OPTIONS = generateTimeOptions();
 
+function getDefaultTime(): string {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const roundedMinutes = minutes < 30 ? 30 : 0;
+  const roundedHours = minutes < 30 ? hours : hours + 1;
+  const finalHours = roundedHours >= 24 ? 23 : roundedHours;
+  const finalMinutes = roundedHours >= 24 ? 30 : roundedMinutes;
+  return `${String(finalHours).padStart(2, "0")}:${String(finalMinutes).padStart(2, "0")}`;
+}
+
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -101,7 +112,7 @@ export default function MemoPage() {
     setEditingId(null);
     setModalTitle("");
     setModalDate(getTodayStr());
-    setModalTime("");
+    setModalTime(getDefaultTime());
     setModalLocation("");
     setModalOpen(true);
   }
@@ -110,7 +121,7 @@ export default function MemoPage() {
     setEditingId(todo.id);
     setModalTitle(todo.title);
     setModalDate(todo.scheduled_date);
-    setModalTime(todo.scheduled_time ?? "");
+    setModalTime(todo.scheduled_time ?? getDefaultTime());
     setModalLocation(todo.location ?? "");
     setModalOpen(true);
   }
@@ -562,11 +573,19 @@ export default function MemoPage() {
         {past.length > 0 && (
           <section className="mb-6">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">過去</h2>
-            <div className="space-y-2">
-              {past.map((todo) => (
-                <div key={todo.id}>
-                  <p className="text-xs text-gray-400 mb-1 ml-1">{formatDate(todo.scheduled_date)}</p>
-                  {renderTodoItem(todo)}
+            <div className="space-y-4">
+              {Object.entries(
+                past.reduce((groups, todo) => {
+                  if (!groups[todo.scheduled_date]) groups[todo.scheduled_date] = [];
+                  groups[todo.scheduled_date].push(todo);
+                  return groups;
+                }, {} as Record<string, ScheduledTodo[]>)
+              ).sort(([a], [b]) => a.localeCompare(b)).map(([date, items]) => (
+                <div key={date}>
+                  <p className="text-xs text-gray-400 mb-1.5 ml-1">{formatDate(date)}</p>
+                  <div className="space-y-2">
+                    {items.map((todo) => renderTodoItem(todo))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -587,11 +606,19 @@ export default function MemoPage() {
         {future.length > 0 && (
           <section className="mb-6">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">今後</h2>
-            <div className="space-y-2">
-              {future.map((todo) => (
-                <div key={todo.id}>
-                  <p className="text-xs text-gray-400 mb-1 ml-1">{formatDate(todo.scheduled_date)}</p>
-                  {renderTodoItem(todo)}
+            <div className="space-y-4">
+              {Object.entries(
+                future.reduce((groups, todo) => {
+                  if (!groups[todo.scheduled_date]) groups[todo.scheduled_date] = [];
+                  groups[todo.scheduled_date].push(todo);
+                  return groups;
+                }, {} as Record<string, ScheduledTodo[]>)
+              ).sort(([a], [b]) => a.localeCompare(b)).map(([date, items]) => (
+                <div key={date}>
+                  <p className="text-xs text-gray-400 mb-1.5 ml-1">{formatDate(date)}</p>
+                  <div className="space-y-2">
+                    {items.map((todo) => renderTodoItem(todo))}
+                  </div>
                 </div>
               ))}
             </div>

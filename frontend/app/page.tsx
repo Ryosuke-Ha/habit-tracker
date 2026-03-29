@@ -56,6 +56,17 @@ function generateTimeOptions(): string[] {
 }
 const TIME_OPTIONS = generateTimeOptions();
 
+function getDefaultTime(): string {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const roundedMinutes = minutes < 30 ? 30 : 0;
+  const roundedHours = minutes < 30 ? hours : hours + 1;
+  const finalHours = roundedHours >= 24 ? 23 : roundedHours;
+  const finalMinutes = roundedHours >= 24 ? 30 : roundedMinutes;
+  return `${String(finalHours).padStart(2, "0")}:${String(finalMinutes).padStart(2, "0")}`;
+}
+
 type Phase = "initial" | "loading" | "content";
 
 export default function Home() {
@@ -194,7 +205,7 @@ export default function Home() {
   }
 
   function openModal() {
-    setModalTitle(""); setModalTime("07:00"); setModalLocation("");
+    setModalTitle(""); setModalTime(getDefaultTime()); setModalLocation("");
     setIsPersistentModal(false); setAddModalOpen(true);
   }
   function closeModal() { setAddModalOpen(false); }
