@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Saving indicator (`savingId`) for KPT item edits on the weekly review page
 - Collapsible "completed items" accordion on the daily TODO dashboard — done items are grouped into a toggleable section instead of being shown inline
 - Smart default time for new TODO items — time field now defaults to the next upcoming 30-minute interval instead of a fixed value
+- Convert between daily log and persistent TODO — the edit form for daily log items and persistent TODOs now includes a "持ち越しTODO" toggle that converts the item between the two types (deletes the original and creates the new type with optimistic UI and rollback on failure)
+- Full-screen loading spinner on the login page while the session status is loading
 
 ### Changed
 
@@ -37,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Daily TODO list now separates incomplete and completed items — incomplete items are shown first, completed items are hidden behind a collapsible "完了済み" accordion that defaults to collapsed
 - Past and future scheduled TODO sections on the memo page now group items by date, displaying a single date header per group instead of repeating the date for each item
 - Editing a scheduled TODO on the memo page now defaults the time field to the next 30-minute interval when the todo has no saved time, instead of leaving it empty
+- Memo page no longer displays past scheduled TODOs — only today's and future items are shown
+- Memo page empty state message now checks today and future lists instead of the full todos array
+- TodoItem edit form now shows a "持ち越しTODO" toggle for daily log (habit) and persistent TODO items, with amber-themed styling when the persistent toggle is active
+- Login page sign-in button `disabled` state no longer depends on session loading status (handled by the new full-screen loading spinner instead)
 
 ### Fixed
 
@@ -45,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Previous week's Try items state is now properly reset on week navigation to prevent stale data
 
 ### Removed
+
+- Removed the "過去" (past) section from the memo page — past scheduled TODOs are no longer displayed
 
 ---
 
