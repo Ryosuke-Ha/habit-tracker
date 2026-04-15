@@ -161,3 +161,41 @@ class MonthlyAIAnalysis(Base):
     year_month = Column(String, nullable=False)   # "YYYY-MM"
     analysis = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CoachingSession(Base):
+    __tablename__ = "coaching_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    session_date = Column(String, nullable=False)  # YYYY-MM-DD (this week's Saturday)
+    status = Column(String, nullable=False, default="in_progress")  # "in_progress" | "completed"
+    context = Column(String, nullable=True)  # JSON string
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages = relationship("CoachingMessage", back_populates="session", cascade="all, delete-orphan", order_by="CoachingMessage.created_at")
+
+
+class CoachingMessage(Base):
+    __tablename__ = "coaching_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("coaching_sessions.id"), nullable=False)
+    role = Column(String, nullable=False)  # "assistant" | "user"
+    content = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    session = relationship("CoachingSession", back_populates="messages")
+
+
+class CoachingGoal(Base):
+    __tablename__ = "coaching_goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    due_date = Column(String, nullable=True)  # YYYY-MM-DD or null
+    status = Column(String, nullable=False, default="active")  # "active" | "completed" | "abandoned"
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
