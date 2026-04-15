@@ -20,6 +20,15 @@ export default function LoginPage() {
     await signIn("google", { callbackUrl: "/" });
   }
 
+  if (status === "loading") {
+    return (
+      <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center">
+        <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-white text-sm font-light tracking-[0.2em]">読み込み中...</p>
+      </div>
+    );
+  }
+
   return (
     <main className="flex flex-col items-center justify-center min-h-[80vh] text-center">
       <h1 className="text-3xl font-bold text-gray-900 mb-2">習慣トラッカー</h1>
@@ -27,7 +36,7 @@ export default function LoginPage() {
 
       <button
         onClick={handleSignIn}
-        disabled={loading || status === "loading"}
+        disabled={loading}
         className="flex items-center gap-3 px-6 py-3.5 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md text-gray-700 font-medium transition-all disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {/* Google ロゴ */}

@@ -403,6 +403,60 @@ export default function Home() {
     return Promise.resolve();
   }
 
+  async function handleConvertLogToPersistent(logId: number, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
+    const email = session?.user?.email;
+    if (!email) return;
+    const prevLog = dailyLogs.find((l) => l.logId === logId);
+    if (!prevLog) return;
+    const tempId = -Date.now();
+    const tempPersistent: PersistentTodo = { id: tempId, title: data.title, scheduled_time: data.scheduled_time || null, location: data.location || null, is_completed: false, completed_at: null };
+    setDailyLogs((prev) => prev.filter((l) => l.logId !== logId));
+    setPersistentTodos((prev) => [...prev, tempPersistent]);
+    try {
+      await fetch(`${API}/logs/${logId}`, { method: "DELETE" });
+      const res = await fetch(`${API}/persistent-todos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time || null, location: data.location }),
+      });
+      if (res.ok) {
+        const newTodo: PersistentTodo = await res.json();
+        setPersistentTodos((prev) => prev.map((t) => (t.id === tempId ? newTodo : t)));
+      }
+    } catch {
+      if (prevLog) setDailyLogs((prev) => [...prev, prevLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
+      setPersistentTodos((prev) => prev.filter((t) => t.id !== tempId));
+    }
+  }
+
+  async function handleConvertPersistentToLog(id: number, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
+    const email = session?.user?.email;
+    if (!email || !templateId) return;
+    const prevTodo = persistentTodos.find((t) => t.id === id);
+    const tempLogId = -Date.now();
+    const tempLog: DailyLogEntry = { logId: tempLogId, habitId: null, title: data.title, scheduledTime: data.scheduled_time, location: data.location, isChecked: false };
+    setPersistentTodos((prev) => prev.filter((t) => t.id !== id));
+    setDailyLogs((prev) => [...prev, tempLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
+    try {
+      await fetch(`${API}/persistent-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+      const res = await fetch(`${API}/logs/standalone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time, location: data.location, template_id: templateId }),
+      });
+      if (res.ok) {
+        const newLog: LogApiResponse = await res.json();
+        setDailyLogs((prev) =>
+          prev.map((l) => l.logId === tempLogId ? { logId: newLog.id, habitId: newLog.habit_id, title: newLog.title, scheduledTime: newLog.scheduled_time, location: newLog.location, isChecked: newLog.is_checked } : l)
+            .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
+        );
+      }
+    } catch {
+      if (prevTodo) setPersistentTodos((prev) => [...prev, prevTodo]);
+      setDailyLogs((prev) => prev.filter((l) => l.logId !== tempLogId));
+    }
+  }
+
   function handleEditPersistent(id: number, data: { title: string; scheduled_time: string; location: string }): Promise<void> {
     const email = session?.user?.email;
     if (!email) return Promise.resolve();
@@ -660,6 +714,7 @@ export default function Home() {
                         onToggle={() => handleToggleLog(log.logId)}
                         onDelete={() => handleDeleteLog(log.logId)}
                         onEdit={(data) => handleEditLog(log.logId, log.habitId, data)}
+                        onConvertToPersistent={(data) => handleConvertLogToPersistent(log.logId, data)}
                       />
                     );
                   } else if (item.kind === "persistent") {
@@ -679,6 +734,7 @@ export default function Home() {
                         onToggle={() => handleTogglePersistent(todo.id)}
                         onDelete={() => handleDeletePersistent(todo.id)}
                         onEdit={(data) => handleEditPersistent(todo.id, data)}
+                        onConvertToLog={(data) => handleConvertPersistentToLog(todo.id, data)}
                       />
                     );
                   } else {
@@ -743,6 +799,7 @@ export default function Home() {
                             onToggle={() => handleToggleLog(log.logId)}
                             onDelete={() => handleDeleteLog(log.logId)}
                             onEdit={(data) => handleEditLog(log.logId, log.habitId, data)}
+                            onConvertToPersistent={(data) => handleConvertLogToPersistent(log.logId, data)}
                           />
                         );
                       } else if (item.kind === "persistent") {
@@ -762,6 +819,7 @@ export default function Home() {
                             onToggle={() => handleTogglePersistent(todo.id)}
                             onDelete={() => handleDeletePersistent(todo.id)}
                             onEdit={(data) => handleEditPersistent(todo.id, data)}
+                            onConvertToLog={(data) => handleConvertPersistentToLog(todo.id, data)}
                           />
                         );
                       } else {

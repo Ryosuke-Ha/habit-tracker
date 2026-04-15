@@ -57,6 +57,8 @@ interface TodoItemProps {
   onToggle: () => void;
   onDelete: () => void;
   onEdit: (data: { title: string; scheduled_time: string; location: string }) => Promise<void>;
+  onConvertToPersistent?: (data: { title: string; scheduled_time: string; location: string }) => Promise<void>;
+  onConvertToLog?: (data: { title: string; scheduled_time: string; location: string }) => Promise<void>;
 }
 
 // バーストパーティクルの色リスト
@@ -72,11 +74,12 @@ const BURST_COLORS = [
 // 放射するパーティクル数
 const PARTICLE_COUNT = 8;
 
-export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemProps) {
+export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertToPersistent, onConvertToLog }: TodoItemProps) {
   const [mode, setMode] = useState<"view" | "edit" | "confirm-delete">("view");
   const [editTitle, setEditTitle] = useState(item.title);
   const [editTime, setEditTime] = useState(item.scheduledTime ?? "07:00");
   const [editLocation, setEditLocation] = useState(item.location ?? "");
+  const [isPersistentToggle, setIsPersistentToggle] = useState(item.kind === "persistent");
   const [saving, setSaving] = useState(false);
 
   // Accordion
@@ -176,7 +179,14 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
     if (!editTitle.trim()) return;
     setSaving(true);
     try {
-      await onEdit({ title: editTitle.trim(), scheduled_time: editTime, location: editLocation.trim() });
+      const data = { title: editTitle.trim(), scheduled_time: editTime, location: editLocation.trim() };
+      if (item.kind === "habit" && isPersistentToggle && onConvertToPersistent) {
+        await onConvertToPersistent(data);
+      } else if (item.kind === "persistent" && !isPersistentToggle && onConvertToLog) {
+        await onConvertToLog(data);
+      } else {
+        await onEdit(data);
+      }
       setMode("view");
     } finally {
       setSaving(false);
@@ -185,8 +195,9 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
 
   // ---- EDIT MODE ----
   if (mode === "edit") {
+    const showPersistentToggle = item.kind === "habit" || item.kind === "persistent";
     return (
-      <li className="bg-white border-2 border-blue-300 rounded-xl p-4 flex flex-col gap-3">
+      <li className={`border-2 rounded-xl p-4 flex flex-col gap-3 ${isPersistentToggle && showPersistentToggle ? "bg-amber-50 border-amber-400" : "bg-white border-blue-300"}`}>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">何をする？</label>
           <input
@@ -197,6 +208,21 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
         </div>
+        {showPersistentToggle && (
+          <div className={`flex items-center justify-between p-3 rounded-xl ${isPersistentToggle ? "bg-amber-100" : "bg-gray-50"}`}>
+            <div>
+              <p className="text-sm font-medium text-gray-700">持ち越しTODO</p>
+              <p className="text-xs text-gray-400">完了まで毎日表示されます</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsPersistentToggle((v) => !v)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${isPersistentToggle ? "bg-amber-400" : "bg-gray-300"}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isPersistentToggle ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+        )}
         <div className="flex gap-3">
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-500 mb-1">いつ？</label>
@@ -222,7 +248,7 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit }: TodoItemP
           <button
             onClick={handleEditSave}
             disabled={saving || !editTitle.trim()}
-            className="flex-1 py-2 bg-black text-white text-sm font-semibold rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+            className={`flex-1 py-2 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors ${isPersistentToggle && showPersistentToggle ? "bg-amber-500 hover:bg-amber-600" : "bg-black hover:bg-gray-800"}`}
           >
             {saving ? "保存中..." : "保存する"}
           </button>
