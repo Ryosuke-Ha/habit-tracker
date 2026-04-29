@@ -73,45 +73,50 @@ def check_notifications(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     now = datetime.now(JST)
-    current_hour = now.hour
-    current_minute = now.minute
 
     todos = db.query(models.ScheduledTodo).filter(
-        (models.ScheduledTodo.notification_offset_1 != None)    # noqa: E711
-        | (models.ScheduledTodo.notification_offset_2 != None)  # noqa: E711
+        models.ScheduledTodo.is_completed == False,  # noqa: E712
+        (
+            (models.ScheduledTodo.notification_offset_1 != None)    # noqa: E711
+            & (models.ScheduledTodo.notification_sent_1 == False)   # noqa: E712
+        )
+        | (
+            (models.ScheduledTodo.notification_offset_2 != None)    # noqa: E711
+            & (models.ScheduledTodo.notification_sent_2 == False)   # noqa: E712
+        )
     ).all()
 
     sent_count = 0
     for todo in todos:
-        for slot in (1, 2):
-            offset = todo.notification_offset_1 if slot == 1 else todo.notification_offset_2
-            already_sent = todo.notification_sent_1 if slot == 1 else todo.notification_sent_2
-
-            if not offset or offset not in VALID_OFFSETS:
-                continue
-            if already_sent:
-                continue
-
-            notify_dt = calc_notification_datetime(todo.scheduled_date, todo.scheduled_time, offset)
-            print(f"Checking: {todo.title}, notification_dt: {notify_dt}, now: {now.strftime('%Y-%m-%d %H:%M')}")
-            if notify_dt is None:
-                continue
-
-            if not (
-                notify_dt.date() == now.date()
-                and notify_dt.hour == current_hour
-                and notify_dt.minute == current_minute
-            ):
-                continue
-
-            success = send_slack_notification(todo)
-            if success:
-                if slot == 1:
+        if todo.notification_offset_1 and not todo.notification_sent_1:
+            notification_dt = calc_notification_datetime(
+                todo.scheduled_date, todo.scheduled_time, todo.notification_offset_1
+            )
+            print(
+                f"Checking: {todo.title}, date: {todo.scheduled_date}, "
+                f"notification_dt: {notification_dt}, now: {now.strftime('%Y-%m-%d %H:%M')}, "
+                f"will_send: {notification_dt is not None and notification_dt <= now}"
+            )
+            if notification_dt and notification_dt <= now:
+                if send_slack_notification(todo):
                     todo.notification_sent_1 = True
-                else:
+                    todo.updated_at = datetime.utcnow()
+                    sent_count += 1
+
+        if todo.notification_offset_2 and not todo.notification_sent_2:
+            notification_dt = calc_notification_datetime(
+                todo.scheduled_date, todo.scheduled_time, todo.notification_offset_2
+            )
+            print(
+                f"Checking: {todo.title}, date: {todo.scheduled_date}, "
+                f"notification_dt: {notification_dt}, now: {now.strftime('%Y-%m-%d %H:%M')}, "
+                f"will_send: {notification_dt is not None and notification_dt <= now}"
+            )
+            if notification_dt and notification_dt <= now:
+                if send_slack_notification(todo):
                     todo.notification_sent_2 = True
-                todo.updated_at = datetime.utcnow()
-                sent_count += 1
+                    todo.updated_at = datetime.utcnow()
+                    sent_count += 1
 
     db.commit()
     return {"sent": sent_count}
