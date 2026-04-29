@@ -50,6 +50,8 @@ def send_slack_notification(todo: models.ScheduledTodo):
         from slack_sdk import WebClient
         token = os.getenv("SLACK_BOT_TOKEN")
         channel = os.getenv("SLACK_NOTIFY_CHANNEL")
+        print(f"SLACK_BOT_TOKEN exists: {bool(token)}")
+        print(f"Sending Slack notification to channel: {channel}")
         if not token or not channel:
             return False
         client = WebClient(token=token)
@@ -57,7 +59,12 @@ def send_slack_notification(todo: models.ScheduledTodo):
         location_str = todo.location or "未設定"
         date_str = str(todo.scheduled_date)
         text = f"📝 TODOメモ通知\n{todo.title}\n🕐 {time_str} | 📍 {location_str}\n📅 {date_str}"
-        client.chat_postMessage(channel=channel, text=text)
+        try:
+            response = client.chat_postMessage(channel=channel, text=text)
+            print(f"Slack response: ok={response['ok']}, error={response.get('error', 'none')}")
+        except Exception as e:
+            print(f"Slack error: {type(e).__name__}: {str(e)}")
+            return False
         return True
     except Exception:
         return False
