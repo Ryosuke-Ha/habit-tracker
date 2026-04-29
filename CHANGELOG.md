@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Smart default time for new TODO items — time field now defaults to the next upcoming 30-minute interval instead of a fixed value
 - Convert between daily log and persistent TODO — the edit form for daily log items and persistent TODOs now includes a "持ち越しTODO" toggle that converts the item between the two types (deletes the original and creates the new type with optimistic UI and rollback on failure)
 - Full-screen loading spinner on the login page while the session status is loading
+- Debug logging in the notification checker — each scheduled TODO now logs its title, computed notification datetime, and current time during evaluation
 
 ### Changed
 
@@ -43,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memo page empty state message now checks today and future lists instead of the full todos array
 - TodoItem edit form now shows a "持ち越しTODO" toggle for daily log (habit) and persistent TODO items, with amber-themed styling when the persistent toggle is active
 - Login page sign-in button `disabled` state no longer depends on session loading status (handled by the new full-screen loading spinner instead)
+- Notification time matching now compares date, hour, and minute components individually instead of comparing truncated datetime objects
 
 ### Fixed
 
