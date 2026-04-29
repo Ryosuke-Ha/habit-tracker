@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Convert between daily log and persistent TODO — the edit form for daily log items and persistent TODOs now includes a "持ち越しTODO" toggle that converts the item between the two types (deletes the original and creates the new type with optimistic UI and rollback on failure)
 - Full-screen loading spinner on the login page while the session status is loading
 - Debug logging in the notification checker — each scheduled TODO now logs its title, scheduled date, computed notification datetime, current time, and whether the notification will be sent
+- Debug logging for Slack notification delivery — logs whether the bot token is configured, the target channel, Slack API response status, and any errors encountered
 
 ### Changed
 
@@ -53,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added error handling for failed previous week review fetch to prevent unhandled promise rejections
 - Previous week's Try items state is now properly reset on week navigation to prevent stale data
 - Fixed notification checker skipping notifications when the cron job does not fire at the exact scheduled minute — notifications are now sent if the scheduled time has passed rather than requiring an exact match
+
+### Improved
+
+- Slack notification sending now catches and logs errors from the Slack API individually, returning `false` on failure instead of silently falling through to the outer exception handler
 
 ### Removed
 
