@@ -258,7 +258,7 @@ def call_claude(system: str, messages: list) -> str:
     client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
         model="claude-opus-4-6",
-        max_tokens=1500,
+        max_tokens=500,
         system=system,
         messages=messages,
     )

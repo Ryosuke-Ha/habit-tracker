@@ -164,8 +164,8 @@ def generate_analysis(
 
     client = anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=1500,
+        model="claude-haiku-4-5-20251001",
+        max_tokens=800,
         system="""あなたはAtomic Habitsの専門家として、ユーザーの週次振り返りを分析するコーチです。
 簡潔で実践的なフィードバックを日本語で提供してください。
 テーブル形式は使わず、箇条書きと短い文章で回答してください。
@@ -331,8 +331,8 @@ def generate_monthly_analysis(
 
     client = anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=1500,
+        model="claude-haiku-4-5-20251001",
+        max_tokens=800,
         system="""あなたはAtomic Habitsの専門家として、ユーザーの月次習慣データを分析するコーチです。
 簡潔で実践的なフィードバックを日本語で提供してください。
 テーブル形式は使わず、箇条書きと短い文章で回答してください。
