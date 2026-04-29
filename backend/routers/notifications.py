@@ -75,8 +75,8 @@ def check_notifications(
     now_jst = datetime.now(JST).replace(second=0, microsecond=0)
 
     todos = db.query(models.ScheduledTodo).filter(
-        (models.ScheduledTodo.notification_offset_1 != None) |  # noqa: E711
-        (models.ScheduledTodo.notification_offset_2 != None)    # noqa: E711
+        (models.ScheduledTodo.notification_offset_1 != None)    # noqa: E711
+        | (models.ScheduledTodo.notification_offset_2 != None)  # noqa: E711
     ).all()
 
     sent_count = 0
