@@ -72,7 +72,9 @@ def check_notifications(
     if not internal_key or x_internal_key != internal_key:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    now_jst = datetime.now(JST).replace(second=0, microsecond=0)
+    now = datetime.now(JST)
+    current_hour = now.hour
+    current_minute = now.minute
 
     todos = db.query(models.ScheduledTodo).filter(
         (models.ScheduledTodo.notification_offset_1 != None)    # noqa: E711
@@ -91,11 +93,15 @@ def check_notifications(
                 continue
 
             notify_dt = calc_notification_datetime(todo.scheduled_date, todo.scheduled_time, offset)
+            print(f"Checking: {todo.title}, notification_dt: {notify_dt}, now: {now.strftime('%Y-%m-%d %H:%M')}")
             if notify_dt is None:
                 continue
 
-            notify_dt_truncated = notify_dt.replace(second=0, microsecond=0)
-            if notify_dt_truncated != now_jst:
+            if not (
+                notify_dt.date() == now.date()
+                and notify_dt.hour == current_hour
+                and notify_dt.minute == current_minute
+            ):
                 continue
 
             success = send_slack_notification(todo)
