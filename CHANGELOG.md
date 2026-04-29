@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Smart default time for new TODO items — time field now defaults to the next upcoming 30-minute interval instead of a fixed value
 - Convert between daily log and persistent TODO — the edit form for daily log items and persistent TODOs now includes a "持ち越しTODO" toggle that converts the item between the two types (deletes the original and creates the new type with optimistic UI and rollback on failure)
 - Full-screen loading spinner on the login page while the session status is loading
-- Debug logging in the notification checker — each scheduled TODO now logs its title, computed notification datetime, and current time during evaluation
+- Debug logging in the notification checker — each scheduled TODO now logs its title, scheduled date, computed notification datetime, current time, and whether the notification will be sent
 
 ### Changed
 
@@ -44,13 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memo page empty state message now checks today and future lists instead of the full todos array
 - TodoItem edit form now shows a "持ち越しTODO" toggle for daily log (habit) and persistent TODO items, with amber-themed styling when the persistent toggle is active
 - Login page sign-in button `disabled` state no longer depends on session loading status (handled by the new full-screen loading spinner instead)
-- Notification time matching now compares date, hour, and minute components individually instead of comparing truncated datetime objects
+- Notification time matching now uses a `<=` comparison against the current time instead of exact minute matching, so missed notifications are sent on the next check rather than being skipped entirely
+- Notification checker query now pre-filters to only incomplete scheduled TODOs with unsent notifications, reducing the number of rows fetched from the database
 
 ### Fixed
 
 - Fixed trailing slash in the previous week's review API call on the weekly review page
 - Added error handling for failed previous week review fetch to prevent unhandled promise rejections
 - Previous week's Try items state is now properly reset on week navigation to prevent stale data
+- Fixed notification checker skipping notifications when the cron job does not fire at the exact scheduled minute — notifications are now sent if the scheduled time has passed rather than requiring an exact match
 
 ### Removed
 
