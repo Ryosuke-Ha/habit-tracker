@@ -17,6 +17,10 @@ interface ScheduledTodo {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  notification_offset_1: string | null;
+  notification_offset_2: string | null;
+  notification_sent_1: boolean;
+  notification_sent_2: boolean;
 }
 
 interface SubTask {
@@ -24,6 +28,20 @@ interface SubTask {
   title: string;
   is_completed: boolean;
   order: number;
+}
+
+const NOTIFICATION_OPTIONS: { value: string | null; label: string; requiresTime: boolean }[] = [
+  { value: null, label: "なし", requiresTime: false },
+  { value: "on_time", label: "設定時刻", requiresTime: true },
+  { value: "30min_before", label: "30分前", requiresTime: true },
+  { value: "1hour_before", label: "1時間前", requiresTime: true },
+  { value: "2hour_before", label: "2時間前", requiresTime: true },
+  { value: "1day_before", label: "1日前", requiresTime: false },
+  { value: "2day_before", label: "2日前", requiresTime: false },
+];
+
+function notificationLabel(offset: string | null): string {
+  return NOTIFICATION_OPTIONS.find((o) => o.value === offset)?.label ?? "なし";
 }
 
 function generateTimeOptions(): string[] {
@@ -76,6 +94,8 @@ export default function MemoPage() {
   const [modalDate, setModalDate] = useState(getTodayStr());
   const [modalTime, setModalTime] = useState("");
   const [modalLocation, setModalLocation] = useState("");
+  const [modalNotif1, setModalNotif1] = useState<string | null>(null);
+  const [modalNotif2, setModalNotif2] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -114,6 +134,8 @@ export default function MemoPage() {
     setModalDate(getTodayStr());
     setModalTime(getDefaultTime());
     setModalLocation("");
+    setModalNotif1(null);
+    setModalNotif2(null);
     setModalOpen(true);
   }
 
@@ -123,12 +145,26 @@ export default function MemoPage() {
     setModalDate(todo.scheduled_date);
     setModalTime(todo.scheduled_time ?? getDefaultTime());
     setModalLocation(todo.location ?? "");
+    setModalNotif1(todo.notification_offset_1);
+    setModalNotif2(todo.notification_offset_2);
     setModalOpen(true);
   }
 
   function closeModal() {
     setModalOpen(false);
     setEditingId(null);
+  }
+
+  // When time is cleared, reset time-dependent notification options
+  function handleModalTimeChange(val: string) {
+    setModalTime(val);
+    if (!val) {
+      const timeBasedValues = new Set(
+        NOTIFICATION_OPTIONS.filter((o) => o.requiresTime).map((o) => o.value)
+      );
+      if (timeBasedValues.has(modalNotif1)) setModalNotif1(null);
+      if (timeBasedValues.has(modalNotif2)) setModalNotif2(null);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -142,6 +178,8 @@ export default function MemoPage() {
       scheduled_date: modalDate,
       scheduled_time: modalTime || null,
       location: modalLocation.trim() || "",
+      notification_offset_1: modalNotif1,
+      notification_offset_2: modalNotif2,
     };
 
     setIsSubmitting(true);
@@ -294,6 +332,23 @@ export default function MemoPage() {
     return d.toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
   }
 
+  function renderNotificationBadge(todo: ScheduledTodo) {
+    const labels: string[] = [];
+    if (todo.notification_offset_1) labels.push(notificationLabel(todo.notification_offset_1));
+    if (todo.notification_offset_2) labels.push(notificationLabel(todo.notification_offset_2));
+    if (labels.length === 0) return null;
+
+    const allSent =
+      (!todo.notification_offset_1 || todo.notification_sent_1) &&
+      (!todo.notification_offset_2 || todo.notification_sent_2);
+
+    return (
+      <span className={`text-xs flex items-center gap-1 ${allSent ? "opacity-50" : ""}`}>
+        🔔 {labels.join(" / ")}
+      </span>
+    );
+  }
+
   function renderTodoItem(todo: ScheduledTodo) {
     const isExpanded = !!expandedIds[todo.id];
     const subtasks = subtasksMap[todo.id] ?? [];
@@ -328,6 +383,7 @@ export default function MemoPage() {
                 </span>
               )}
             </div>
+            {renderNotificationBadge(todo)}
           </div>
           {!todo.is_completed && (
             <button
@@ -420,6 +476,14 @@ export default function MemoPage() {
     );
   }
 
+  const hamburgerItems = [
+    { label: "TODO", onClick: () => router.push("/"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+    { label: "コーチング", onClick: () => router.push("/coaching"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> },
+    { label: "テンプレートを管理", onClick: () => router.push("/templates"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg> },
+    { label: "週の振り返り", onClick: () => router.push("/review/weekly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
+    { label: "月の振り返り", onClick: () => router.push("/review/monthly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
+  ];
+
   if (status === "loading" || loading) {
     return (
       <main>
@@ -430,22 +494,14 @@ export default function MemoPage() {
             </button>
             <h1 className="text-xl font-bold text-gray-900">TODOメモ</h1>
           </div>
-          <HamburgerMenu
-            user={session?.user}
-            onSignOut={() => signOut({ callbackUrl: "/login" })}
-            items={[
-              { label: "TODO", onClick: () => router.push("/"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
-              { label: "コーチング", onClick: () => router.push("/coaching"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> },
-              { label: "テンプレートを管理", onClick: () => router.push("/templates"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg> },
-              { label: "週の振り返り", onClick: () => router.push("/review/weekly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
-              { label: "月の振り返り", onClick: () => router.push("/review/monthly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
-            ]}
-          />
+          <HamburgerMenu user={session?.user} onSignOut={() => signOut({ callbackUrl: "/login" })} items={hamburgerItems} />
         </div>
         <div className="flex justify-center py-16 text-gray-400 text-sm">読み込み中…</div>
       </main>
     );
   }
+
+  const hasTime = !!modalTime;
 
   return (
     <>
@@ -488,7 +544,7 @@ export default function MemoPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">時間（任意）</label>
                   <select
                     value={modalTime}
-                    onChange={(e) => setModalTime(e.target.value)}
+                    onChange={(e) => handleModalTimeChange(e.target.value)}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
                   >
                     <option value="">未設定</option>
@@ -504,6 +560,59 @@ export default function MemoPage() {
                     placeholder="例: オフィス"
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
                   />
+                </div>
+              </div>
+              {/* Notification settings */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">通知設定</label>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-400 mb-1">通知1</label>
+                    <select
+                      value={modalNotif1 ?? ""}
+                      onChange={(e) => {
+                        const val = e.target.value === "" ? null : e.target.value;
+                        setModalNotif1(val);
+                        if (val === null) setModalNotif2(null);
+                      }}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    >
+                      {NOTIFICATION_OPTIONS.map((opt) => (
+                        <option
+                          key={opt.value ?? "__null__"}
+                          value={opt.value ?? ""}
+                          disabled={!!(opt.requiresTime && !hasTime)}
+                        >
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-400 mb-1">通知2</label>
+                    <select
+                      value={modalNotif2 ?? ""}
+                      onChange={(e) => {
+                        const val = e.target.value === "" ? null : e.target.value;
+                        setModalNotif2(val);
+                      }}
+                      disabled={modalNotif1 === null}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {NOTIFICATION_OPTIONS.map((opt) => (
+                        <option
+                          key={opt.value ?? "__null__"}
+                          value={opt.value ?? ""}
+                          disabled={
+                            (opt.requiresTime && !hasTime) ||
+                            (opt.value !== null && opt.value === modalNotif1)
+                          }
+                        >
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
               <div className="flex gap-2 mt-1">
@@ -542,17 +651,7 @@ export default function MemoPage() {
             </button>
             <h1 className="text-xl font-bold text-gray-900">TODOメモ</h1>
           </div>
-          <HamburgerMenu
-            user={session?.user}
-            onSignOut={() => signOut({ callbackUrl: "/login" })}
-            items={[
-              { label: "TODO", onClick: () => router.push("/"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
-              { label: "コーチング", onClick: () => router.push("/coaching"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> },
-              { label: "テンプレートを管理", onClick: () => router.push("/templates"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg> },
-              { label: "週の振り返り", onClick: () => router.push("/review/weekly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
-              { label: "月の振り返り", onClick: () => router.push("/review/monthly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
-            ]}
-          />
+          <HamburgerMenu user={session?.user} onSignOut={() => signOut({ callbackUrl: "/login" })} items={hamburgerItems} />
         </div>
 
         {/* Add button */}

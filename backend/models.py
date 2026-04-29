@@ -141,6 +141,10 @@ class ScheduledTodo(Base):
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    notification_offset_1 = Column(String, nullable=True)
+    notification_offset_2 = Column(String, nullable=True)
+    notification_sent_1 = Column(Boolean, default=False)
+    notification_sent_2 = Column(Boolean, default=False)
 
 
 class WeeklyAIAnalysis(Base):

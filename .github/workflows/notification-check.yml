@@ -1,0 +1,19 @@
+name: Notification Check
+
+on:
+  schedule:
+    - cron: '* * * * *'  # 毎分実行
+  workflow_dispatch:      # 手動実行も可能
+
+jobs:
+  check-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check and send notifications
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+        run: |
+          curl -X POST "$BACKEND_URL/notifications/check" \
+            -H "X-Internal-Key: $INTERNAL_API_KEY" \
+            -H "Content-Type: application/json"

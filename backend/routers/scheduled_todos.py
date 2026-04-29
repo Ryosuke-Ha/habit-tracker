@@ -41,6 +41,10 @@ class ScheduledTodoOut(BaseModel):
     completed_at: Optional[datetime.datetime]
     created_at: datetime.datetime
     updated_at: datetime.datetime
+    notification_offset_1: Optional[str] = None
+    notification_offset_2: Optional[str] = None
+    notification_sent_1: bool = False
+    notification_sent_2: bool = False
 
     class Config:
         from_attributes = True
@@ -51,6 +55,8 @@ class ScheduledTodoCreate(BaseModel):
     scheduled_date: datetime.date
     scheduled_time: Optional[str] = None
     location: Optional[str] = ""
+    notification_offset_1: Optional[str] = None
+    notification_offset_2: Optional[str] = None
 
 
 class ScheduledTodoUpdate(BaseModel):
@@ -58,6 +64,8 @@ class ScheduledTodoUpdate(BaseModel):
     scheduled_date: Optional[datetime.date] = None
     scheduled_time: Optional[str] = None
     location: Optional[str] = None
+    notification_offset_1: Optional[str] = None
+    notification_offset_2: Optional[str] = None
 
 
 @router.get("", response_model=List[ScheduledTodoOut])
@@ -102,6 +110,8 @@ def create_scheduled_todo(
         scheduled_date=body.scheduled_date,
         scheduled_time=body.scheduled_time,
         location=body.location or "",
+        notification_offset_1=body.notification_offset_1,
+        notification_offset_2=body.notification_offset_2,
     )
     db.add(todo)
     db.commit()
@@ -127,6 +137,12 @@ def update_scheduled_todo(
         todo.scheduled_time = body.scheduled_time
     if body.location is not None:
         todo.location = body.location
+    if body.notification_offset_1 is not None or "notification_offset_1" in body.model_fields_set:
+        todo.notification_offset_1 = body.notification_offset_1
+        todo.notification_sent_1 = False
+    if body.notification_offset_2 is not None or "notification_offset_2" in body.model_fields_set:
+        todo.notification_offset_2 = body.notification_offset_2
+        todo.notification_sent_2 = False
     todo.updated_at = datetime.datetime.utcnow()
     db.commit()
     db.refresh(todo)

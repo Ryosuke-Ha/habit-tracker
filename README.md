@@ -279,10 +279,42 @@ Go to **Settings → Secrets and variables → Actions → New repository secret
 | Secret | Required by | Description |
 |--------|-------------|-------------|
 | `ANTHROPIC_API_KEY` | `docs-update.yml` | Anthropic API key used by the auto-documentation workflow to call Claude |
+| `BACKEND_URL` | `notification-check.yml` | Backend URL (e.g. `https://your-app.railway.app`) |
+| `INTERNAL_API_KEY` | `notification-check.yml` | Secret key shared between GitHub Actions and backend for internal endpoints |
 
 > **Note:** `GITHUB_TOKEN` is provided automatically by GitHub Actions and does not need to be added manually.
 
 The other secrets used in production (Google OAuth, Supabase, Slack tokens, etc.) are set directly in the **Vercel** and **Railway** dashboards — they do not need to be added as GitHub repository secrets.
+
+---
+
+## Slack通知チャンネルのセットアップ
+
+TODOメモのSlack通知機能を使うには、以下の手順でチャンネルを設定してください。
+
+1. Slackで `#habit-tracker-notify` チャンネルを作成する
+2. Botをチャンネルに招待する:
+   ```
+   /invite @habit-tracker-bot
+   ```
+3. チャンネルIDを取得する（チャンネル名を右クリック → リンクをコピー → URLの末尾部分 `C0XXXXXXXXX`）
+4. 以下の環境変数を設定する:
+
+   **backend/.env**
+   ```
+   SLACK_BOT_TOKEN=xoxb-...        # slack-bot/.env と同じ値
+   SLACK_NOTIFY_CHANNEL=C0XXXXXXXXX
+   INTERNAL_API_KEY=your-secret-key
+   ```
+
+   **Railway Variables（本番環境）**
+   - `SLACK_BOT_TOKEN`
+   - `SLACK_NOTIFY_CHANNEL`
+   - `INTERNAL_API_KEY`
+
+5. GitHub Actions Secrets に以下を追加する:
+   - `BACKEND_URL`: バックエンドのURL（例: `https://your-app.railway.app`）
+   - `INTERNAL_API_KEY`: 上記と同じ値
 
 ---
 
