@@ -64,6 +64,20 @@ class MonthlyReviewOut(BaseModel):
         from_attributes = True
 
 
+class MonthlyReviewSummaryOut(BaseModel):
+    """MonthlyReviewOut with API-layer computed achievement summary."""
+    id: int
+    user_id: str
+    year_month: str
+    next_month_goal: Optional[str]
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    overall_rate: int
+    total_days_checked: int
+    streak_max: int
+    has_goal: bool
+
+
 class MonthlyReviewUpdate(BaseModel):
     next_month_goal: str
 
@@ -89,6 +103,46 @@ class MonthlyStats(BaseModel):
 
 class GoalOut(BaseModel):
     goal: str
+
+
+# ---- Helpers ----
+
+def _calc_monthly_summary(year: int, month: int, logs: list, today: datetime.date) -> dict:
+    """Compute overall_rate, total_days_checked, streak_max for a given month."""
+    last_day = calendar.monthrange(year, month)[1]
+    first_day = datetime.date(year, month, 1)
+    calc_until = min(datetime.date(year, month, last_day), today)
+
+    date_logs: dict = defaultdict(list)
+    for log in logs:
+        date_logs[log.date].append(log)
+
+    total = len(logs)
+    checked_count = sum(1 for lg in logs if lg.is_checked)
+    overall_rate = round(checked_count / total * 100) if total > 0 else 0
+
+    total_days_checked = sum(
+        1 for d in date_logs
+        if d <= calc_until and any(lg.is_checked for lg in date_logs[d])
+    )
+
+    streak_max = 0
+    current = 0
+    d = first_day
+    while d <= calc_until:
+        if any(lg.is_checked for lg in date_logs[d]):
+            current += 1
+            if current > streak_max:
+                streak_max = current
+        else:
+            current = 0
+        d += datetime.timedelta(days=1)
+
+    return {
+        "overall_rate": overall_rate,
+        "total_days_checked": total_days_checked,
+        "streak_max": streak_max,
+    }
 
 
 # ---- Routes (specific before parameterized) ----
@@ -125,17 +179,67 @@ def get_current_monthly_review(
     return get_or_create_monthly_review(db, user_email, current_year_month())
 
 
-@router.get("/monthly", response_model=List[MonthlyReviewOut])
+@router.get("/monthly", response_model=List[MonthlyReviewSummaryOut])
 def list_monthly_reviews(
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
 ):
-    return (
+    reviews = (
         db.query(models.MonthlyReview)
         .filter_by(user_id=user_email)
         .order_by(models.MonthlyReview.year_month.desc())
         .all()
     )
+    if not reviews:
+        return []
+
+    # Batch-fetch DailyLogs across all review months in a single query
+    year_months = [r.year_month for r in reviews]
+    dates = [
+        (
+            datetime.date(int(ym.split("-")[0]), int(ym.split("-")[1]), 1),
+            datetime.date(
+                int(ym.split("-")[0]),
+                int(ym.split("-")[1]),
+                calendar.monthrange(int(ym.split("-")[0]), int(ym.split("-")[1]))[1],
+            ),
+        )
+        for ym in year_months
+    ]
+    min_date = min(d[0] for d in dates)
+    max_date = max(d[1] for d in dates)
+
+    logs = (
+        db.query(models.DailyLog)
+        .filter(
+            models.DailyLog.date >= min_date,
+            models.DailyLog.date <= max_date,
+            models.DailyLog.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    )
+
+    logs_by_ym: dict = defaultdict(list)
+    for log in logs:
+        ym_key = f"{log.date.year}-{log.date.month:02d}"
+        logs_by_ym[ym_key].append(log)
+
+    today = datetime.date.today()
+    result = []
+    for review in reviews:
+        y, m = map(int, review.year_month.split("-"))
+        summary = _calc_monthly_summary(y, m, logs_by_ym[review.year_month], today)
+        result.append({
+            "id": review.id,
+            "user_id": review.user_id,
+            "year_month": review.year_month,
+            "next_month_goal": review.next_month_goal,
+            "created_at": review.created_at,
+            "updated_at": review.updated_at,
+            "has_goal": bool(review.next_month_goal),
+            **summary,
+        })
+    return result
 
 
 @router.get("/monthly/{year_month}/stats", response_model=MonthlyStats)

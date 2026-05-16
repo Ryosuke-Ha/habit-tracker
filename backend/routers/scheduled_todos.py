@@ -77,6 +77,14 @@ class ScheduledTodoWithCategoryOut(BaseModel):
     display_category: str  # "overdue" | "today" | "future" | "past"
 
 
+class TodayTodosResponse(BaseModel):
+    """Wrapper for GET /scheduled-todos/today with notification summary."""
+    todos: List[ScheduledTodoWithCategoryOut]
+    total_count: int
+    completed_count: int
+    pending_notifications: int
+
+
 class ScheduledTodoCreate(BaseModel):
     title: str
     scheduled_date: datetime.date
@@ -174,7 +182,7 @@ def list_scheduled_todos(
     return overdue + today_todos + future + past
 
 
-@router.get("/today", response_model=List[ScheduledTodoWithCategoryOut])
+@router.get("/today", response_model=TodayTodosResponse)
 def list_today_scheduled_todos(
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
@@ -189,7 +197,18 @@ def list_today_scheduled_todos(
         .order_by(models.ScheduledTodo.scheduled_time)
         .all()
     )
-    return [_enrich(t, today) for t in todos]
+    enriched = [_enrich(t, today) for t in todos]
+    pending_notifications = sum(
+        (1 if t.notification_offset_1 and not t.notification_sent_1 else 0)
+        + (1 if t.notification_offset_2 and not t.notification_sent_2 else 0)
+        for t in todos
+    )
+    return {
+        "todos": enriched,
+        "total_count": len(todos),
+        "completed_count": sum(1 for t in todos if t.is_completed),
+        "pending_notifications": pending_notifications,
+    }
 
 
 @router.post("", response_model=ScheduledTodoWithCategoryOut)

@@ -31,6 +31,8 @@ interface PersistentTodo {
   location: string | null;
   is_completed: boolean;
   completed_at: string | null;
+  days_since_created: number;
+  is_long_pending: boolean;
 }
 
 interface ScheduledTodo {
@@ -40,6 +42,11 @@ interface ScheduledTodo {
   scheduled_time: string | null;
   location: string | null;
   is_completed: boolean;
+  is_overdue: boolean;
+  is_today: boolean;
+  is_future: boolean;
+  days_until: number;
+  display_category: "overdue" | "today" | "future" | "past";
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -196,8 +203,8 @@ export default function Home() {
       }
 
       if (scheduledRes?.ok) {
-        const sData: ScheduledTodo[] = await scheduledRes.json();
-        setScheduledTodos(sData);
+        const sData: { todos: ScheduledTodo[] } = await scheduledRes.json();
+        setScheduledTodos(sData.todos);
       }
     } finally {
       setDataReady(true);
@@ -222,7 +229,7 @@ export default function Home() {
     if (isPersistentModal) {
       if (!email) { setIsSubmitting(false); return; }
       const tempId = -Date.now();
-      const tempTodo: PersistentTodo = { id: tempId, title, scheduled_time: time || null, location: location || null, is_completed: false, completed_at: null };
+      const tempTodo: PersistentTodo = { id: tempId, title, scheduled_time: time || null, location: location || null, is_completed: false, completed_at: null, days_since_created: 0, is_long_pending: false };
       setPersistentTodos((prev) => [...prev, tempTodo]);
       closeModal();
       try {
@@ -409,7 +416,7 @@ export default function Home() {
     const prevLog = dailyLogs.find((l) => l.logId === logId);
     if (!prevLog) return;
     const tempId = -Date.now();
-    const tempPersistent: PersistentTodo = { id: tempId, title: data.title, scheduled_time: data.scheduled_time || null, location: data.location || null, is_completed: false, completed_at: null };
+    const tempPersistent: PersistentTodo = { id: tempId, title: data.title, scheduled_time: data.scheduled_time || null, location: data.location || null, is_completed: false, completed_at: null, days_since_created: 0, is_long_pending: false };
     setDailyLogs((prev) => prev.filter((l) => l.logId !== logId));
     setPersistentTodos((prev) => [...prev, tempPersistent]);
     try {

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import models
@@ -14,6 +15,17 @@ class TemplateResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+PROTECTED_TEMPLATE_NAMES = {"平日", "休日"}
+
+
+class TemplateWithStatsOut(BaseModel):
+    """TemplateResponse with API-layer computed habit count and default flag."""
+    id: int
+    name: str
+    habit_count: int
+    is_default: bool
 
 
 class HabitResponse(BaseModel):
@@ -36,9 +48,23 @@ class TemplateUpdate(BaseModel):
     name: str
 
 
-@router.get("/templates", response_model=list[TemplateResponse])
+@router.get("/templates", response_model=list[TemplateWithStatsOut])
 def get_templates(db: Session = Depends(get_db)):
-    return db.query(models.Template).all()
+    templates = db.query(models.Template).all()
+    habit_counts = dict(
+        db.query(models.Habit.template_id, func.count(models.Habit.id))
+        .group_by(models.Habit.template_id)
+        .all()
+    )
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "habit_count": habit_counts.get(t.id, 0),
+            "is_default": t.name in PROTECTED_TEMPLATE_NAMES,
+        }
+        for t in templates
+    ]
 
 
 @router.post("/templates", response_model=TemplateResponse)
@@ -66,9 +92,6 @@ def update_template(template_id: int, body: TemplateUpdate, db: Session = Depend
     db.commit()
     db.refresh(template)
     return template
-
-
-PROTECTED_TEMPLATE_NAMES = {"平日", "休日"}
 
 
 @router.delete("/templates/{template_id}")

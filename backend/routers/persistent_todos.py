@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 import models
 from database import SessionLocal
 
+_JST = datetime.timezone(datetime.timedelta(hours=9))
+
 router = APIRouter(prefix="/persistent-todos", tags=["persistent-todos"])
 
 
@@ -25,6 +27,8 @@ def require_user(x_user_email: Optional[str] = Header(None)) -> str:
     return x_user_email
 
 
+# ---- Pydantic schemas ----
+
 class PersistentTodoOut(BaseModel):
     id: int
     user_id: str
@@ -39,6 +43,20 @@ class PersistentTodoOut(BaseModel):
         from_attributes = True
 
 
+class PersistentTodoWithStatsOut(BaseModel):
+    """PersistentTodoOut with API-layer computed pending duration fields."""
+    id: int
+    user_id: str
+    title: str
+    scheduled_time: Optional[str]
+    location: Optional[str]
+    is_completed: bool
+    completed_at: Optional[datetime.datetime]
+    created_at: datetime.datetime
+    days_since_created: int
+    is_long_pending: bool
+
+
 class PersistentTodoCreate(BaseModel):
     title: str
     scheduled_time: Optional[str] = None
@@ -51,12 +69,34 @@ class PersistentTodoUpdate(BaseModel):
     location: Optional[str] = None
 
 
-@router.get("", response_model=List[PersistentTodoOut])
+# ---- Helpers ----
+
+def _enrich_persistent(todo: models.PersistentTodo, today: datetime.date) -> dict:
+    """Build a PersistentTodoWithStatsOut-compatible dict from an ORM object."""
+    days_since_created = (today - todo.created_at.date()).days
+    return {
+        "id": todo.id,
+        "user_id": todo.user_id,
+        "title": todo.title,
+        "scheduled_time": todo.scheduled_time,
+        "location": todo.location,
+        "is_completed": todo.is_completed,
+        "completed_at": todo.completed_at,
+        "created_at": todo.created_at,
+        "days_since_created": days_since_created,
+        "is_long_pending": days_since_created >= 7,
+    }
+
+
+# ---- Endpoints ----
+
+@router.get("", response_model=List[PersistentTodoWithStatsOut])
 def list_persistent_todos(
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
 ):
-    return (
+    today = datetime.datetime.now(_JST).date()
+    todos = (
         db.query(models.PersistentTodo)
         .filter(
             models.PersistentTodo.user_id == user_email,
@@ -65,6 +105,7 @@ def list_persistent_todos(
         .order_by(models.PersistentTodo.created_at)
         .all()
     )
+    return [_enrich_persistent(t, today) for t in todos]
 
 
 @router.post("", response_model=PersistentTodoOut)
