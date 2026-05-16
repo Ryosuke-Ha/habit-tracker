@@ -175,6 +175,7 @@ class CoachingSession(Base):
     session_date = Column(String, nullable=False)  # YYYY-MM-DD (this week's Saturday)
     status = Column(String, nullable=False, default="in_progress")  # "in_progress" | "completed"
     context = Column(String, nullable=True)  # JSON string
+    summary = Column(String, nullable=True)  # Generated on completion; used as context for next session
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
