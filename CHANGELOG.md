@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- AI analysis endpoints (weekly and monthly) now use `claude-haiku-4-5-20251001` model instead of `claude-opus-4-6` with a reduced max token limit of 800 (down from 1500)
+- Coaching endpoint `call_claude` max token limit reduced from 1500 to 500
 - `GET /logs/today` and `POST /logs/standalone` now determine "today" using JST (UTC+9) instead of the server's local date
 - `GET /persistent-todos` now returns only incomplete (`is_completed = false`) persistent todos instead of all todos for the user
 - Subtask input area now uses a flex layout with the text input and add button side by side
