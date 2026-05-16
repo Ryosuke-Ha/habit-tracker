@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full-screen loading spinner on the login page while the session status is loading
 - Debug logging in the notification checker — each scheduled TODO now logs its title, scheduled date, computed notification datetime, current time, and whether the notification will be sent
 - Debug logging for Slack notification delivery — logs whether the bot token is configured, the target channel, Slack API response status, and any errors encountered
+- Server-computed display category fields on scheduled TODO responses — `is_overdue`, `is_today`, `is_future`, `days_until`, and `display_category` are now returned by all scheduled TODO endpoints
+- Overdue scheduled TODOs section on the memo page — past incomplete items are highlighted with a red background and "⚠️ 期限切れ" badge
 
 ### Changed
 
@@ -49,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Login page sign-in button `disabled` state no longer depends on session loading status (handled by the new full-screen loading spinner instead)
 - Notification time matching now uses a `<=` comparison against the current time instead of exact minute matching, so missed notifications are sent on the next check rather than being skipped entirely
 - Notification checker query now pre-filters to only incomplete scheduled TODOs with unsent notifications, reducing the number of rows fetched from the database
+- All scheduled TODO endpoints (`GET /scheduled-todos`, `GET /scheduled-todos/today`, `POST /scheduled-todos`, `PUT /scheduled-todos/{id}`, `POST /scheduled-todos/{id}/complete`, `POST /scheduled-todos/{id}/toggle`) now return `ScheduledTodoWithCategoryOut` with computed category fields instead of `ScheduledTodoOut`
+- `GET /scheduled-todos` now returns items sorted by display category: overdue (newest first) → today (by time) → future (by date then time) → past completed (newest first), instead of a simple date/time sort
+- Scheduled TODO timezone handling replaced `zoneinfo.ZoneInfo("Asia/Tokyo")` with a plain `datetime.timezone(timedelta(hours=9))` offset, removing the `zoneinfo`/`backports.zoneinfo` dependency
+- Memo page now groups items using the server-provided `display_category` field instead of computing date comparisons client-side
+- Memo page empty state message now checks overdue, today, and future lists
 
 ### Fixed
 

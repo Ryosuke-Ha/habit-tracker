@@ -594,6 +594,201 @@ Deletes a persistent todo.
 
 ---
 
+### Scheduled Todos
+
+All scheduled todo endpoints require `X-User-Email`.
+
+All responses include server-computed category fields that classify each item relative to the current date (JST). The `display_category` field is one of `"overdue"` (past date, not completed), `"today"`, `"future"`, or `"past"` (past date, completed).
+
+#### `GET /scheduled-todos`
+
+Returns all scheduled todos for the authenticated user, sorted by display category: overdue items (newest first) → today's items (by time) → future items (by date then time) → past completed items (newest first).
+
+**Response `200`**
+```json
+[
+  {
+    "id": 1,
+    "user_id": "user@example.com",
+    "title": "Dentist appointment",
+    "scheduled_date": "2026-03-20",
+    "scheduled_time": "14:00",
+    "location": "Clinic",
+    "is_completed": false,
+    "completed_at": null,
+    "created_at": "2026-03-18T09:00:00",
+    "updated_at": "2026-03-18T09:00:00",
+    "notification_offset_1": null,
+    "notification_offset_2": null,
+    "notification_sent_1": false,
+    "notification_sent_2": false,
+    "is_overdue": true,
+    "is_today": false,
+    "is_future": false,
+    "days_until": -2,
+    "display_category": "overdue"
+  },
+  {
+    "id": 2,
+    "user_id": "user@example.com",
+    "title": "Team meeting",
+    "scheduled_date": "2026-03-22",
+    "scheduled_time": "10:00",
+    "location": "Office",
+    "is_completed": false,
+    "completed_at": null,
+    "created_at": "2026-03-20T09:00:00",
+    "updated_at": "2026-03-20T09:00:00",
+    "notification_offset_1": "30min",
+    "notification_offset_2": null,
+    "notification_sent_1": false,
+    "notification_sent_2": false,
+    "is_overdue": false,
+    "is_today": true,
+    "is_future": false,
+    "days_until": 0,
+    "display_category": "today"
+  }
+]
+```
+
+---
+
+#### `GET /scheduled-todos/today`
+
+Returns scheduled todos for today (JST), ordered by `scheduled_time`. Each item includes the computed category fields.
+
+**Response `200`** — Array of `ScheduledTodoWithCategory` objects (see above for shape).
+
+---
+
+#### `POST /scheduled-todos`
+
+Creates a new scheduled todo. Returns the created item with computed category fields.
+
+**Request Body**
+```json
+{
+  "title": "Dentist appointment",
+  "scheduled_date": "2026-03-25",
+  "scheduled_time": "14:00",
+  "location": "Clinic",
+  "notification_offset_1": "30min",
+  "notification_offset_2": null
+}
+```
+
+**Response `200`**
+```json
+{
+  "id": 3,
+  "user_id": "user@example.com",
+  "title": "Dentist appointment",
+  "scheduled_date": "2026-03-25",
+  "scheduled_time": "14:00",
+  "location": "Clinic",
+  "is_completed": false,
+  "completed_at": null,
+  "created_at": "2026-03-22T10:00:00",
+  "updated_at": "2026-03-22T10:00:00",
+  "notification_offset_1": "30min",
+  "notification_offset_2": null,
+  "notification_sent_1": false,
+  "notification_sent_2": false,
+  "is_overdue": false,
+  "is_today": false,
+  "is_future": true,
+  "days_until": 3,
+  "display_category": "future"
+}
+```
+
+---
+
+#### `PUT /scheduled-todos/{id}`
+
+Updates a scheduled todo. All fields are optional. Returns the updated item with computed category fields.
+
+**Path Parameters**
+| Name | Type | Description |
+|------|------|-------------|
+| `id` | integer | Scheduled todo ID |
+
+**Request Body**
+```json
+{
+  "title": "Dentist checkup",
+  "scheduled_date": "2026-03-26",
+  "scheduled_time": "15:00",
+  "location": "New Clinic",
+  "notification_offset_1": "1hour",
+  "notification_offset_2": "10min"
+}
+```
+
+**Response `200`** — Updated `ScheduledTodoWithCategory` object.
+
+**Error Responses**
+| Status | Detail |
+|--------|--------|
+| `404` | `"Not found"` |
+
+---
+
+#### `POST /scheduled-todos/{id}/complete`
+
+Marks a scheduled todo as completed. Sets `is_completed` to `true` and records `completed_at`. Returns the updated item with computed category fields.
+
+**Path Parameters**
+| Name | Type | Description |
+|------|------|-------------|
+| `id` | integer | Scheduled todo ID |
+
+**Response `200`** — Updated `ScheduledTodoWithCategory` object.
+
+**Error Responses**
+| Status | Detail |
+|--------|--------|
+| `404` | `"Not found"` |
+
+---
+
+#### `POST /scheduled-todos/{id}/toggle`
+
+Toggles the `is_completed` state of a scheduled todo. Returns the updated item with computed category fields.
+
+**Path Parameters**
+| Name | Type | Description |
+|------|------|-------------|
+| `id` | integer | Scheduled todo ID |
+
+**Response `200`** — Updated `ScheduledTodoWithCategory` object.
+
+**Error Responses**
+| Status | Detail |
+|--------|--------|
+| `404` | `"Not found"` |
+
+---
+
+#### `DELETE /scheduled-todos/{id}`
+
+Deletes a scheduled todo.
+
+**Path Parameters**
+| Name | Type | Description |
+|------|------|-------------|
+| `id` | integer | Scheduled todo ID |
+
+**Response `204`** — No content.
+
+**Error Responses**
+| Status | Detail |
+|--------|--------|
+| `404` | `"Not found"` |
+
+---
+
 ### Subtasks
 
 Subtask endpoints do **not** require `X-User-Email`. Access control is enforced implicitly via `todo_id`.
@@ -980,7 +1175,7 @@ Returns achievement statistics for the given month.
 ```
 
 | Field | Description |
-|-------|-----------|
+|-------|------------|
 | `overall_rate` | Ratio of checked logs to total logs for the month (0–1) |
 | `streak` | Consecutive days ending today with at least one check |
 | `daily_rates` | Per-day breakdown, only up to today |
@@ -1105,6 +1300,29 @@ interface PersistentTodo {
   is_completed: boolean;
   completed_at: string | null; // ISO 8601 datetime
   created_at: string;          // ISO 8601 datetime
+}
+
+interface ScheduledTodo {
+  id: number;
+  user_id: string;
+  title: string;
+  scheduled_date: string;        // "YYYY-MM-DD"
+  scheduled_time: string | null; // "HH:MM" or null
+  location: string | null;
+  is_completed: boolean;
+  completed_at: string | null;   // ISO 8601 datetime
+  created_at: string;            // ISO 8601 datetime
+  updated_at: string;            // ISO 8601 datetime
+  notification_offset_1: string | null;
+  notification_offset_2: string | null;
+  notification_sent_1: boolean;
+  notification_sent_2: boolean;
+  // Server-computed category fields
+  is_overdue: boolean;           // true if past date and not completed
+  is_today: boolean;             // true if scheduled for today (JST)
+  is_future: boolean;            // true if scheduled for a future date
+  days_until: number;            // days until scheduled_date (negative = overdue)
+  display_category: "overdue" | "today" | "future" | "past";
 }
 
 interface SubTask {
