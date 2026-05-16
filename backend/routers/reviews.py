@@ -7,6 +7,11 @@ from sqlalchemy.orm import Session
 
 import models
 from database import SessionLocal
+from services.weekly_stats import (
+    get_achievement_rate_vs_last_week,
+    get_last_week_try_completion,
+    get_weekly_stats,
+)
 
 _JST = datetime.timezone(datetime.timedelta(hours=9))
 
@@ -80,6 +85,24 @@ class WeeklyReviewOut(BaseModel):
         from_attributes = True
 
 
+class WeeklyReviewWithStatsOut(BaseModel):
+    """WeeklyReview with API-layer computed achievement stats."""
+    id: int
+    user_id: str
+    week_start_date: datetime.date
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    kpt_items: List[KPTItemOut] = []
+    # Computed by API layer
+    achievement_rate: Optional[int] = None
+    achievement_rate_vs_last_week: Optional[str] = None
+    checked_habits: Optional[int] = None
+    total_habits: Optional[int] = None
+    weakest_habit: Optional[str] = None
+    strongest_habit: Optional[str] = None
+    last_week_try_completion: Optional[str] = None
+
+
 class KPTItemCreate(BaseModel):
     type: str   # "keep" | "problem" | "try"
     content: str
@@ -88,6 +111,46 @@ class KPTItemCreate(BaseModel):
 class KPTItemUpdate(BaseModel):
     content: Optional[str] = None
     is_completed: Optional[bool] = None
+
+
+# ---- Helper ----
+
+def _build_review_with_stats(
+    review: models.WeeklyReview,
+    db: Session,
+) -> dict:
+    """Build a WeeklyReviewWithStatsOut-compatible dict from a WeeklyReview ORM object."""
+    stats = get_weekly_stats(review.week_start_date, db)
+    vs_last_week = get_achievement_rate_vs_last_week(
+        review.week_start_date, stats["achievement_rate"], db
+    )
+    try_completion = get_last_week_try_completion(review.user_id, review.week_start_date, db)
+
+    return {
+        "id": review.id,
+        "user_id": review.user_id,
+        "week_start_date": review.week_start_date,
+        "created_at": review.created_at,
+        "updated_at": review.updated_at,
+        "kpt_items": [
+            {
+                "id": item.id,
+                "review_id": item.review_id,
+                "type": item.type,
+                "content": item.content,
+                "is_completed": item.is_completed,
+                "created_at": item.created_at,
+            }
+            for item in review.kpt_items
+        ],
+        "achievement_rate": stats["achievement_rate"],
+        "achievement_rate_vs_last_week": vs_last_week,
+        "checked_habits": stats["checked_habits"],
+        "total_habits": stats["total_habits"],
+        "weakest_habit": stats["weakest_habit"],
+        "strongest_habit": stats["strongest_habit"],
+        "last_week_try_completion": try_completion,
+    }
 
 
 # ---- Routes (specific paths before parameterized) ----
@@ -115,14 +178,15 @@ def get_current_try_items(
     return [item for item in review.kpt_items if item.type == "try"]
 
 
-@router.get("/weekly/current", response_model=WeeklyReviewOut)
+@router.get("/weekly/current", response_model=WeeklyReviewWithStatsOut)
 def get_current_review(
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
 ):
     today = get_today_jst()
     week_start = get_week_start(today)
-    return get_or_create_review(db, user_email, week_start)
+    review = get_or_create_review(db, user_email, week_start)
+    return _build_review_with_stats(review, db)
 
 
 @router.get("/weekly", response_model=List[WeeklyReviewOut])
@@ -138,7 +202,7 @@ def list_reviews(
     )
 
 
-@router.get("/weekly/{week_start_date}", response_model=WeeklyReviewOut)
+@router.get("/weekly/{week_start_date}", response_model=WeeklyReviewWithStatsOut)
 def get_review_by_date(
     week_start_date: str,
     db: Session = Depends(get_db),
@@ -149,7 +213,8 @@ def get_review_by_date(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     week_start = get_week_start(date)
-    return get_or_create_review(db, user_email, week_start)
+    review = get_or_create_review(db, user_email, week_start)
+    return _build_review_with_stats(review, db)
 
 
 @router.post("/weekly/{review_id}/kpt", response_model=KPTItemOut)

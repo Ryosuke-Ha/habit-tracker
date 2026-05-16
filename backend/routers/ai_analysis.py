@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 import models
 from database import SessionLocal
+from services.weekly_stats import get_weekly_stats
 
 router = APIRouter(prefix="/reviews", tags=["ai-analysis"])
 
@@ -109,18 +110,7 @@ def generate_analysis(
         ]
 
     # 今週の習慣達成率を計算
-    logs = (
-        db.query(models.DailyLog)
-        .filter(
-            models.DailyLog.date >= week_start,
-            models.DailyLog.date <= week_end,
-            models.DailyLog.is_deleted == False,  # noqa: E712
-        )
-        .all()
-    )
-    total = len(logs)
-    checked = sum(1 for log in logs if log.is_checked)
-    rate = round(checked / total * 100) if total > 0 else 0
+    rate = get_weekly_stats(week_start, db)["achievement_rate"]
 
     # プロンプト組み立て
     keep_text = "\n".join(f"・{c}" for c in keep_items) if keep_items else "（なし）"
