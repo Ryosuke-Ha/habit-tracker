@@ -21,6 +21,12 @@ interface ScheduledTodo {
   notification_offset_2: string | null;
   notification_sent_1: boolean;
   notification_sent_2: boolean;
+  // API-computed fields
+  is_overdue: boolean;
+  is_today: boolean;
+  is_future: boolean;
+  days_until: number;
+  display_category: "overdue" | "today" | "future" | "past";
 }
 
 interface SubTask {
@@ -72,6 +78,23 @@ function toLocalDateStr(d: Date): string {
 
 function getTodayStr(): string {
   return toLocalDateStr(new Date());
+}
+
+function sortByCategory(todos: ScheduledTodo[]): ScheduledTodo[] {
+  const overdue = todos
+    .filter((t) => t.display_category === "overdue")
+    .sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date));
+  const today = todos
+    .filter((t) => t.display_category === "today")
+    .sort((a, b) => (a.scheduled_time ?? "").localeCompare(b.scheduled_time ?? ""));
+  const future = todos
+    .filter((t) => t.display_category === "future")
+    .sort((a, b) => {
+      if (a.scheduled_date !== b.scheduled_date) return a.scheduled_date.localeCompare(b.scheduled_date);
+      return (a.scheduled_time ?? "").localeCompare(b.scheduled_time ?? "");
+    });
+  const past = todos.filter((t) => t.display_category === "past");
+  return [...overdue, ...today, ...future, ...past];
 }
 
 export default function MemoPage() {
@@ -192,7 +215,7 @@ export default function MemoPage() {
         });
         if (res.ok) {
           const updated: ScheduledTodo = await res.json();
-          setTodos((prev) => prev.map((t) => (t.id === editingId ? updated : t)));
+          setTodos((prev) => sortByCategory(prev.map((t) => (t.id === editingId ? updated : t))));
           closeModal();
         }
       } else {
@@ -203,10 +226,7 @@ export default function MemoPage() {
         });
         if (res.ok) {
           const created: ScheduledTodo = await res.json();
-          setTodos((prev) => [...prev, created].sort((a, b) => {
-            if (a.scheduled_date !== b.scheduled_date) return a.scheduled_date.localeCompare(b.scheduled_date);
-            return (a.scheduled_time ?? "").localeCompare(b.scheduled_time ?? "");
-          }));
+          setTodos((prev) => sortByCategory([...prev, created]));
           closeModal();
         }
       }
@@ -322,10 +342,11 @@ export default function MemoPage() {
     }
   }
 
-  // Group todos by today / future (past are hidden)
-  const todayStr = getTodayStr();
-  const today = todos.filter((t) => t.scheduled_date === todayStr);
-  const future = todos.filter((t) => t.scheduled_date > todayStr);
+  // Group todos by API-provided display_category (computed server-side)
+  const overdue = todos.filter((t) => t.display_category === "overdue");
+  const todayTodos = todos.filter((t) => t.display_category === "today");
+  const future = todos.filter((t) => t.display_category === "future");
+  // "past" (completed past dates) is intentionally not rendered
 
   function formatDate(dateStr: string): string {
     const d = new Date(dateStr + "T00:00:00");
@@ -358,7 +379,13 @@ export default function MemoPage() {
     return (
       <div
         key={todo.id}
-        className={`rounded-xl border overflow-hidden ${todo.is_completed ? "bg-gray-50 border-gray-100 opacity-50" : "bg-white border-gray-200"}`}
+        className={`rounded-xl border overflow-hidden ${
+          todo.is_completed
+            ? "bg-gray-50 border-gray-100 opacity-50"
+            : todo.is_overdue
+            ? "bg-red-50 border-red-200"
+            : "bg-white border-gray-200"
+        }`}
       >
         {/* Card header — clickable to toggle accordion */}
         <div
@@ -374,6 +401,11 @@ export default function MemoPage() {
               </p>
             )}
             <div className="flex items-center gap-2 min-w-0">
+              {todo.is_overdue && (
+                <span className="flex-shrink-0 text-xs font-semibold text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full">
+                  ⚠️ 期限切れ
+                </span>
+              )}
               <p className={`text-sm font-medium truncate ${todo.is_completed ? "line-through text-gray-400" : "text-gray-800"}`}>
                 {todo.title}
               </p>
@@ -665,16 +697,26 @@ export default function MemoPage() {
           新しいメモを追加
         </button>
 
-        {today.length === 0 && future.length === 0 && (
+        {overdue.length === 0 && todayTodos.length === 0 && future.length === 0 && (
           <p className="text-center text-sm text-gray-400 py-10">メモがありません</p>
         )}
 
+        {/* Overdue */}
+        {overdue.length > 0 && (
+          <section className="mb-6">
+            <h2 className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">期限切れ</h2>
+            <div className="space-y-2">
+              {overdue.map((todo) => renderTodoItem(todo))}
+            </div>
+          </section>
+        )}
+
         {/* Today */}
-        {today.length > 0 && (
+        {todayTodos.length > 0 && (
           <section className="mb-6">
             <h2 className="text-xs font-semibold text-purple-600 uppercase tracking-wide mb-2">今日</h2>
             <div className="space-y-2">
-              {today.map((todo) => renderTodoItem(todo))}
+              {todayTodos.map((todo) => renderTodoItem(todo))}
             </div>
           </section>
         )}
