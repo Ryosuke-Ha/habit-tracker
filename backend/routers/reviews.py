@@ -7,18 +7,13 @@ from sqlalchemy.orm import Session
 
 import models
 from database import SessionLocal
+from domain.enums import KPTType
+from domain.value_objects import WeekPeriod
 from services.weekly_stats import (
     get_achievement_rate_vs_last_week,
     get_last_week_try_completion,
     get_weekly_stats,
 )
-
-_JST = datetime.timezone(datetime.timedelta(hours=9))
-
-
-def get_today_jst() -> datetime.date:
-    return datetime.datetime.now(tz=_JST).date()
-
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 
@@ -35,12 +30,6 @@ def require_user(x_user_email: Optional[str] = Header(None)) -> str:
     if not x_user_email:
         raise HTTPException(status_code=401, detail="X-User-Email header is required")
     return x_user_email
-
-
-def get_week_start(date: datetime.date) -> datetime.date:
-    """Return the Sunday that starts the week containing `date`."""
-    days_since_sunday = (date.weekday() + 1) % 7
-    return date - datetime.timedelta(days=days_since_sunday)
 
 
 def get_or_create_review(
@@ -165,8 +154,7 @@ def get_current_try_items(
     - 200 + []: review exists but has no Try items
     - 200 + [...]: review exists with Try items
     """
-    today = get_today_jst()
-    this_week_start = get_week_start(today)
+    this_week_start = WeekPeriod.current().start
     last_week_start = this_week_start - datetime.timedelta(days=7)
     review = (
         db.query(models.WeeklyReview)
@@ -175,7 +163,7 @@ def get_current_try_items(
     )
     if not review:
         raise HTTPException(status_code=404, detail="Last week's review not found")
-    return [item for item in review.kpt_items if item.type == "try"]
+    return [item for item in review.kpt_items if item.type == KPTType.TRY]
 
 
 @router.get("/weekly/current", response_model=WeeklyReviewWithStatsOut)
@@ -183,8 +171,7 @@ def get_current_review(
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
 ):
-    today = get_today_jst()
-    week_start = get_week_start(today)
+    week_start = WeekPeriod.current().start
     review = get_or_create_review(db, user_email, week_start)
     return _build_review_with_stats(review, db)
 
@@ -212,7 +199,7 @@ def get_review_by_date(
         date = datetime.date.fromisoformat(week_start_date)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
-    week_start = get_week_start(date)
+    week_start = WeekPeriod.from_date(date).start
     review = get_or_create_review(db, user_email, week_start)
     return _build_review_with_stats(review, db)
 
@@ -227,7 +214,7 @@ def add_kpt_item(
     review = db.query(models.WeeklyReview).filter_by(id=review_id, user_id=user_email).first()
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
-    if body.type not in ("keep", "problem", "try"):
+    if body.type not in {t.value for t in KPTType}:
         raise HTTPException(status_code=400, detail="type must be keep, problem, or try")
     item = models.KPTItem(review_id=review_id, type=body.type, content=body.content)
     db.add(item)

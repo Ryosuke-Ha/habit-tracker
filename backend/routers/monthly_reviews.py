@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 import models
 from database import SessionLocal
+from domain.value_objects import YearMonth
 
 router = APIRouter(prefix="/reviews", tags=["monthly-reviews"])
 
@@ -28,8 +29,7 @@ def require_user(x_user_email: Optional[str] = Header(None)) -> str:
 
 
 def current_year_month() -> str:
-    today = datetime.date.today()
-    return f"{today.year}-{today.month:02d}"
+    return YearMonth.current().to_string()
 
 
 def get_or_create_monthly_review(
@@ -155,11 +155,11 @@ def get_current_goal(
     """Return last month's next_month_goal as the current month's goal (for TODO screen).
     404 if last month's review doesn't exist or goal is empty.
     """
-    today = datetime.date.today()
-    if today.month == 1:
-        last_ym = f"{today.year - 1}-12"
+    current_ym = YearMonth.current()
+    if current_ym.month == 1:
+        last_ym = YearMonth(current_ym.year - 1, 12).to_string()
     else:
-        last_ym = f"{today.year}-{today.month - 1:02d}"
+        last_ym = YearMonth(current_ym.year, current_ym.month - 1).to_string()
 
     review = (
         db.query(models.MonthlyReview)
@@ -194,17 +194,13 @@ def list_monthly_reviews(
         return []
 
     # Batch-fetch DailyLogs across all review months in a single query
-    year_months = [r.year_month for r in reviews]
+    year_months_parsed = [YearMonth.from_string(r.year_month) for r in reviews]
     dates = [
         (
-            datetime.date(int(ym.split("-")[0]), int(ym.split("-")[1]), 1),
-            datetime.date(
-                int(ym.split("-")[0]),
-                int(ym.split("-")[1]),
-                calendar.monthrange(int(ym.split("-")[0]), int(ym.split("-")[1]))[1],
-            ),
+            datetime.date(ym.year, ym.month, 1),
+            datetime.date(ym.year, ym.month, calendar.monthrange(ym.year, ym.month)[1]),
         )
-        for ym in year_months
+        for ym in year_months_parsed
     ]
     min_date = min(d[0] for d in dates)
     max_date = max(d[1] for d in dates)
@@ -227,8 +223,8 @@ def list_monthly_reviews(
     today = datetime.date.today()
     result = []
     for review in reviews:
-        y, m = map(int, review.year_month.split("-"))
-        summary = _calc_monthly_summary(y, m, logs_by_ym[review.year_month], today)
+        ym_obj = YearMonth.from_string(review.year_month)
+        summary = _calc_monthly_summary(ym_obj.year, ym_obj.month, logs_by_ym[review.year_month], today)
         result.append({
             "id": review.id,
             "user_id": review.user_id,
@@ -249,7 +245,8 @@ def get_monthly_stats(
     _user_email: str = Depends(require_user),
 ):
     try:
-        year, month = map(int, year_month.split("-"))
+        ym_obj = YearMonth.from_string(year_month)
+        year, month = ym_obj.year, ym_obj.month
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
 
@@ -336,10 +333,7 @@ def get_monthly_review_by_month(
 ):
     # Validate format
     try:
-        parts = year_month.split("-")
-        if len(parts) != 2:
-            raise ValueError
-        datetime.date(int(parts[0]), int(parts[1]), 1)
+        YearMonth.from_string(year_month)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
     return get_or_create_monthly_review(db, user_email, year_month)

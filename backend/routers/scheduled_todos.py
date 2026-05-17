@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 import models
 from database import SessionLocal
+from domain.enums import TodoDisplayCategory
 
 _JST = datetime.timezone(datetime.timedelta(hours=9))
 
@@ -113,11 +114,11 @@ def _enrich(todo: models.ScheduledTodo, today: datetime.date) -> dict:
     is_overdue = days_until < 0 and not todo.is_completed
 
     if is_overdue:
-        display_category = "overdue"
+        display_category = TodoDisplayCategory.OVERDUE
     elif is_today:
-        display_category = "today"
+        display_category = TodoDisplayCategory.TODAY
     elif is_future:
-        display_category = "future"
+        display_category = TodoDisplayCategory.FUTURE
     else:
         # past date + completed
         display_category = "past"
@@ -161,16 +162,16 @@ def list_scheduled_todos(
     enriched = [_enrich(t, today) for t in todos]
 
     overdue = sorted(
-        [t for t in enriched if t["display_category"] == "overdue"],
+        [t for t in enriched if t["display_category"] == TodoDisplayCategory.OVERDUE],
         key=lambda t: t["scheduled_date"],
         reverse=True,
     )
     today_todos = sorted(
-        [t for t in enriched if t["display_category"] == "today"],
+        [t for t in enriched if t["display_category"] == TodoDisplayCategory.TODAY],
         key=lambda t: t["scheduled_time"] or "",
     )
     future = sorted(
-        [t for t in enriched if t["display_category"] == "future"],
+        [t for t in enriched if t["display_category"] == TodoDisplayCategory.FUTURE],
         key=lambda t: (t["scheduled_date"], t["scheduled_time"] or ""),
     )
     past = sorted(

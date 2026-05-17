@@ -1,11 +1,11 @@
-import datetime
 import json
-from datetime import timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 import models
+from domain.enums import GoalStatus, SessionStatus
+from domain.value_objects import WeekPeriod
 from services.weekly_stats import (
     get_achievement_rate_vs_last_week,
     get_weekly_stats,
@@ -49,10 +49,9 @@ Step5: セッションのまとめ・来週への問いかけ
 
 def build_coaching_context(user_id: str, db: Session) -> dict:
     """Gather and pre-process all coaching context data for the current week."""
-    today = datetime.date.today()
-    days_since_sunday = (today.weekday() + 1) % 7
-    week_start = today - datetime.timedelta(days=days_since_sunday)
-    week_end = week_start + timedelta(days=6)
+    week_period = WeekPeriod.current()
+    week_start = week_period.start
+    week_end = week_period.end
 
     stats = get_weekly_stats(week_start, db)
     vs_last_week = get_achievement_rate_vs_last_week(week_start, stats["achievement_rate"], db)
@@ -64,7 +63,7 @@ def build_coaching_context(user_id: str, db: Session) -> dict:
             if len(kpt_data[item.type]) < 3:
                 kpt_data[item.type].append(item.content)
 
-    prev_week_start = week_start - timedelta(days=7)
+    prev_week_start = WeekPeriod.previous().start
     prev_review = db.query(models.WeeklyReview).filter_by(user_id=user_id, week_start_date=prev_week_start).first()
     prev_try_items: list = []
     if prev_review:
@@ -73,12 +72,12 @@ def build_coaching_context(user_id: str, db: Session) -> dict:
             for i in prev_review.kpt_items if i.type == "try"
         ][:3]
 
-    active_goals = db.query(models.CoachingGoal).filter_by(user_id=user_id, status="active").all()
+    active_goals = db.query(models.CoachingGoal).filter_by(user_id=user_id, status=GoalStatus.ACTIVE).all()
     goals_data = [{"id": g.id, "title": g.title} for g in active_goals]
 
     prev_session = (
         db.query(models.CoachingSession)
-        .filter_by(user_id=user_id, status="completed")
+        .filter_by(user_id=user_id, status=SessionStatus.COMPLETED)
         .order_by(models.CoachingSession.created_at.desc())
         .first()
     )

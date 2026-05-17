@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 import models
 from database import SessionLocal
+from domain.value_objects import YearMonth
 from services.weekly_stats import get_weekly_stats
 
 router = APIRouter(prefix="/reviews", tags=["ai-analysis"])
@@ -186,10 +187,7 @@ def get_monthly_analysis(
     user_email: str = Depends(require_user),
 ):
     try:
-        parts = year_month.split("-")
-        if len(parts) != 2:
-            raise ValueError
-        datetime.date(int(parts[0]), int(parts[1]), 1)
+        YearMonth.from_string(year_month)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
 
@@ -210,9 +208,9 @@ def generate_monthly_analysis(
     user_email: str = Depends(require_user),
 ):
     try:
-        year, month = map(int, year_month.split("-"))
-        datetime.date(year, month, 1)
-    except (ValueError, AttributeError):
+        ym_obj = YearMonth.from_string(year_month)
+        year, month = ym_obj.year, ym_obj.month
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYY-MM")
 
     # 既に生成済みなら 409

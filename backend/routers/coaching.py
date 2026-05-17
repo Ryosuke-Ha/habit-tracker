@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 import models
 from database import SessionLocal
+from domain.enums import GoalStatus, SessionStatus
+from domain.value_objects import WeekPeriod
 from services.coaching_context import build_coaching_context, build_message_context, build_system_prompt
 
 router = APIRouter(prefix="/coaching", tags=["coaching"])
@@ -95,10 +97,7 @@ class UpdateGoalRequest(BaseModel):
 # ---- Helper Functions ----
 
 def get_current_week_saturday() -> datetime.date:
-    today = datetime.date.today()
-    days_since_sunday = (today.weekday() + 1) % 7
-    week_start_sunday = today - datetime.timedelta(days=days_since_sunday)
-    return week_start_sunday + datetime.timedelta(days=6)
+    return WeekPeriod.current().end
 
 
 def call_claude(system: str, messages: list, max_tokens: int = 500) -> str:
@@ -179,7 +178,7 @@ def create_session(
     session = models.CoachingSession(
         user_id=user_email,
         session_date=saturday.isoformat(),
-        status="in_progress",
+        status=SessionStatus.IN_PROGRESS,
         context=json.dumps(context_data, ensure_ascii=False),
     )
     db.add(session)
@@ -223,7 +222,7 @@ def send_message(
     session = db.query(models.CoachingSession).filter_by(id=session_id, user_id=user_email).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session.status == "completed":
+    if session.status == SessionStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Session is already completed")
 
     user_msg = models.CoachingMessage(
@@ -265,7 +264,7 @@ def complete_session(
     session = db.query(models.CoachingSession).filter_by(id=session_id, user_id=user_email).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session.status == "completed":
+    if session.status == SessionStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Session is already completed")
 
     all_msgs = (
@@ -299,7 +298,7 @@ def complete_session(
         content=summary_content,
     )
     db.add(summary_msg)
-    session.status = "completed"
+    session.status = SessionStatus.COMPLETED
     session.summary = summary_content
     db.commit()
     db.refresh(session)
@@ -313,7 +312,7 @@ def list_goals(
 ):
     goals = (
         db.query(models.CoachingGoal)
-        .filter_by(user_id=user_email, status="active")
+        .filter_by(user_id=user_email, status=GoalStatus.ACTIVE)
         .order_by(models.CoachingGoal.created_at.desc())
         .all()
     )
@@ -330,7 +329,7 @@ def create_goal(
         user_id=user_email,
         title=body.title,
         due_date=body.due_date,
-        status="active",
+        status=GoalStatus.ACTIVE,
     )
     db.add(goal)
     db.commit()
