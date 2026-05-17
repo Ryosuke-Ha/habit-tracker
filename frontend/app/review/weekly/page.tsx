@@ -201,7 +201,7 @@ export default function WeeklyReviewPage() {
       prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === item.id ? { ...i, is_completed: !i.is_completed } : i)) } : prev
     );
     try {
-      await fetch(`${API}/reviews/kpt/${item.id}`, {
+      await fetch(`${API}/reviews/weekly/${item.review_id}/kpt/${item.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-User-Email": email },
         body: JSON.stringify({ is_completed: !item.is_completed }),
@@ -218,13 +218,15 @@ export default function WeeklyReviewPage() {
     const email = session!.user!.email!;
     const content = editContent.trim();
     const prevItem = review?.kpt_items.find((i) => i.id === itemId);
+    const reviewId = review?.id;
+    if (!reviewId) return;
     setReview((prev) =>
       prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === itemId ? { ...i, content } : i)) } : prev
     );
     setEditingId(null);
     setSavingId(itemId);
     try {
-      const res = await fetch(`${API}/reviews/kpt/${itemId}`, {
+      const res = await fetch(`${API}/reviews/weekly/${reviewId}/kpt/${itemId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-User-Email": email },
         body: JSON.stringify({ content }),
@@ -244,12 +246,14 @@ export default function WeeklyReviewPage() {
 
   async function handleDelete(itemId: number) {
     const email = session!.user!.email!;
+    const reviewId = review?.id;
+    if (!reviewId) return;
     const prevItems = review?.kpt_items ?? [];
     setReview((prev) =>
       prev ? { ...prev, kpt_items: prev.kpt_items.filter((i) => i.id !== itemId) } : prev
     );
     try {
-      await fetch(`${API}/reviews/kpt/${itemId}`, {
+      await fetch(`${API}/reviews/weekly/${reviewId}/kpt/${itemId}`, {
         method: "DELETE",
         headers: { "X-User-Email": email },
       });
