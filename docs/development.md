@@ -15,7 +15,7 @@ For database schema see [`database.md`](./database.md).
 ### Prerequisites
 
 | Tool | Version | Purpose |
-|------|---------|---------|
+|------|---------|--------|
 | Node.js | 20+ | Frontend runtime |
 | npm | bundled with Node.js | Frontend package manager |
 | Python | 3.11+ | Backend runtime |
@@ -36,7 +36,7 @@ code --install-extension eamodio.gitlens
 ```
 
 | Extension | ID | Purpose |
-|-----------|-----|---------|
+|-----------|-----|--------|
 | ESLint | `dbaeumer.vscode-eslint` | TypeScript/JS linting |
 | Prettier | `esbenp.prettier-vscode` | Code formatting |
 | Pylance | `ms-python.vscode-pylance` | Python type checking and IntelliSense |
@@ -134,6 +134,8 @@ habit-tracker/
 │   └── tests/                  # Jest + Testing Library test files
 │
 ├── backend/                    # FastAPI application (Python 3.11)
+│   ├── domain/                 # Domain layer
+│   │   └── value_objects.py    # Value objects (WeekPeriod, YearMonth, ScheduledTime, AchievementRate)
 │   ├── routers/                # One file per resource group
 │   │   ├── templates.py
 │   │   ├── habits.py
@@ -151,7 +153,9 @@ habit-tracker/
 │       ├── conftest.py         # In-memory SQLite fixtures
 │       ├── test_templates.py
 │       ├── test_habits.py
-│       └── test_logs.py
+│       ├── test_logs.py
+│       └── domain/
+│           └── test_value_objects.py  # Unit tests for domain value objects
 │
 ├── slack-bot/                  # Slack Auto-Fix Bot (Python)
 │   ├── agent/
@@ -177,7 +181,7 @@ habit-tracker/
 ### Branch Strategy
 
 | Branch pattern | Purpose |
-|----------------|---------|
+|----------------|--------|
 | `main` | Production — auto-deploys to Vercel and Railway on merge |
 | `feature/[name]` | New features (e.g. `feature/apple-watch-sync`) |
 | `fix/[name]` | Bug fixes (e.g. `fix/monthly-chart-timezone`) |
@@ -194,7 +198,7 @@ Follow the [Conventional Commits](https://www.conventionalcommits.org/) format:
 ```
 
 | Type | When to use |
-|------|-------------|
+|------|------------|
 | `feat` | New user-facing feature |
 | `fix` | Bug fix |
 | `docs` | Documentation only |
@@ -287,6 +291,9 @@ pytest tests/test_habits.py
 # Run a specific test function
 pytest tests/test_habits.py::test_create_habit
 
+# Run domain unit tests only
+pytest tests/domain/
+
 # Coverage only (no terminal output for tests)
 pytest --cov=. --cov-report=term-missing
 
@@ -302,6 +309,7 @@ Current test files:
 | `tests/test_templates.py` | Template CRUD endpoints |
 | `tests/test_habits.py` | Habit CRUD endpoints |
 | `tests/test_logs.py` | Daily log creation and toggle |
+| `tests/domain/test_value_objects.py` | Domain value objects (`WeekPeriod`, `YearMonth`, `ScheduledTime`, `AchievementRate`) |
 
 The `conftest.py` fixture overrides the `get_db` dependency with an in-memory SQLite session and recreates the schema before each test, so tests are fully isolated with no shared state.
 
@@ -591,5 +599,6 @@ The backend allows requests only from `FRONTEND_URL`. Make sure:
 ### Test coverage requirements
 
 - **Backend:** every new router endpoint should have at least one happy-path test and one error-path test in `backend/tests/`
+- **Backend:** domain value objects and business logic should have unit tests in `backend/tests/domain/`
 - **Frontend:** add a test in `frontend/tests/` for any new component that contains non-trivial logic (conditional rendering, event handlers)
 - Run the full test suite locally before opening a PR — CI will catch failures, but it's faster to fix them before pushing
