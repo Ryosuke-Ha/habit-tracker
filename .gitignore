@@ -29,4 +29,6 @@ mobile/.expo/
 # Claude Code
 .claude/
 
+# Coverage
+.coverage
 
