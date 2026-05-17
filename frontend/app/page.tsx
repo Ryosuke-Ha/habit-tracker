@@ -21,7 +21,7 @@ interface LogApiResponse {
   order: number;
 }
 
-interface TryItem { id: number; content: string; is_completed: boolean; }
+interface TryItem { id: number; review_id: number; content: string; is_completed: boolean; }
 type MonthlyGoalStatus = "no_goal" | "has_goal";
 
 interface PersistentTodo {
@@ -277,7 +277,7 @@ export default function Home() {
     if (!prevItem) return;
     setTryItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, is_completed: !i.is_completed } : i)));
     try {
-      await fetch(`${API}/reviews/kpt/${itemId}`, {
+      await fetch(`${API}/reviews/weekly/${prevItem.review_id}/kpt/${itemId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-User-Email": email },
         body: JSON.stringify({ is_completed: !prevItem.is_completed }),
