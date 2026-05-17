@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import models
 from database import SessionLocal
 from domain.enums import KPTType
-from domain.exceptions import BusinessRuleViolationError
+from domain.exceptions import AggregateNotFoundError, BusinessRuleViolationError
 from domain.value_objects import WeekPeriod
 from services.weekly_stats import (
     get_achievement_rate_vs_last_week,
@@ -227,21 +227,87 @@ def add_kpt_item(
     return item
 
 
-@router.put("/kpt/{item_id}", response_model=KPTItemOut)
+@router.put("/weekly/{review_id}/kpt/{item_id}", response_model=KPTItemOut)
 def update_kpt_item(
+    review_id: int,
     item_id: int,
     body: KPTItemUpdate,
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
 ):
-    item = (
+    """集約ルート（WeeklyReview）経由でKPTItemを更新する"""
+    review = (
+        db.query(models.WeeklyReview)
+        .filter_by(id=review_id, user_id=user_email)
+        .first()
+    )
+    if not review:
+        raise HTTPException(status_code=404, detail="WeeklyReview not found")
+    try:
+        item = review.find_kpt_item(item_id)
+    except AggregateNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    if body.content is not None:
+        item.content = body.content
+    if body.is_completed is not None:
+        item.is_completed = body.is_completed
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.delete("/weekly/{review_id}/kpt/{item_id}", status_code=204)
+def delete_kpt_item(
+    review_id: int,
+    item_id: int,
+    db: Session = Depends(get_db),
+    user_email: str = Depends(require_user),
+):
+    """集約ルート（WeeklyReview）経由でKPTItemを削除する"""
+    review = (
+        db.query(models.WeeklyReview)
+        .filter_by(id=review_id, user_id=user_email)
+        .first()
+    )
+    if not review:
+        raise HTTPException(status_code=404, detail="WeeklyReview not found")
+    try:
+        item = review.find_kpt_item(item_id)
+    except AggregateNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    db.delete(item)
+    db.commit()
+
+
+# ---- Deprecated endpoints (backward-compatible) ----
+
+@router.put("/kpt/{item_id}", response_model=KPTItemOut)
+def update_kpt_item_deprecated(
+    item_id: int,
+    body: KPTItemUpdate,
+    db: Session = Depends(get_db),
+    user_email: str = Depends(require_user),
+):
+    """Deprecated: Use PUT /reviews/weekly/{review_id}/kpt/{item_id} instead"""
+    kpt_item = (
         db.query(models.KPTItem)
         .join(models.WeeklyReview)
         .filter(models.KPTItem.id == item_id, models.WeeklyReview.user_id == user_email)
         .first()
     )
-    if not item:
+    if not kpt_item:
         raise HTTPException(status_code=404, detail="Item not found")
+    review = (
+        db.query(models.WeeklyReview)
+        .filter_by(id=kpt_item.review_id, user_id=user_email)
+        .first()
+    )
+    if not review:
+        raise HTTPException(status_code=404, detail="WeeklyReview not found")
+    try:
+        item = review.find_kpt_item(item_id)
+    except AggregateNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     if body.content is not None:
         item.content = body.content
     if body.is_completed is not None:
@@ -252,18 +318,30 @@ def update_kpt_item(
 
 
 @router.delete("/kpt/{item_id}", status_code=204)
-def delete_kpt_item(
+def delete_kpt_item_deprecated(
     item_id: int,
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
 ):
-    item = (
+    """Deprecated: Use DELETE /reviews/weekly/{review_id}/kpt/{item_id} instead"""
+    kpt_item = (
         db.query(models.KPTItem)
         .join(models.WeeklyReview)
         .filter(models.KPTItem.id == item_id, models.WeeklyReview.user_id == user_email)
         .first()
     )
-    if not item:
+    if not kpt_item:
         raise HTTPException(status_code=404, detail="Item not found")
+    review = (
+        db.query(models.WeeklyReview)
+        .filter_by(id=kpt_item.review_id, user_id=user_email)
+        .first()
+    )
+    if not review:
+        raise HTTPException(status_code=404, detail="WeeklyReview not found")
+    try:
+        item = review.find_kpt_item(item_id)
+    except AggregateNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     db.delete(item)
     db.commit()
