@@ -298,7 +298,7 @@ def toggle_log(log_id: int, db: Session = Depends(get_db)):
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
 
-    log.is_checked = not log.is_checked
+    log.toggle()
     db.commit()
     db.refresh(log)
 

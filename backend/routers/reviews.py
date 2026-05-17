@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 import models
 from database import SessionLocal
 from domain.enums import KPTType
+from domain.exceptions import BusinessRuleViolationError
 from domain.value_objects import WeekPeriod
 from services.weekly_stats import (
     get_achievement_rate_vs_last_week,
@@ -216,7 +217,10 @@ def add_kpt_item(
         raise HTTPException(status_code=404, detail="Review not found")
     if body.type not in {t.value for t in KPTType}:
         raise HTTPException(status_code=400, detail="type must be keep, problem, or try")
-    item = models.KPTItem(review_id=review_id, type=body.type, content=body.content)
+    try:
+        item = review.add_kpt_item(KPTType(body.type), body.content)
+    except BusinessRuleViolationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     db.add(item)
     db.commit()
     db.refresh(item)

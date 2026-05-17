@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 import models
 from database import SessionLocal
 from domain.enums import GoalStatus, SessionStatus
+from domain.exceptions import InvalidStateTransitionError
 from domain.value_objects import WeekPeriod
 from services.coaching_context import build_coaching_context, build_message_context, build_system_prompt
 
@@ -222,14 +223,10 @@ def send_message(
     session = db.query(models.CoachingSession).filter_by(id=session_id, user_id=user_email).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session.status == SessionStatus.COMPLETED:
-        raise HTTPException(status_code=400, detail="Session is already completed")
-
-    user_msg = models.CoachingMessage(
-        session_id=session_id,
-        role="user",
-        content=body.content,
-    )
+    try:
+        user_msg = session.add_message("user", body.content)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     db.add(user_msg)
     db.flush()
 
@@ -264,9 +261,6 @@ def complete_session(
     session = db.query(models.CoachingSession).filter_by(id=session_id, user_id=user_email).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session.status == SessionStatus.COMPLETED:
-        raise HTTPException(status_code=400, detail="Session is already completed")
-
     all_msgs = (
         db.query(models.CoachingMessage)
         .filter_by(session_id=session_id)
@@ -298,8 +292,10 @@ def complete_session(
         content=summary_content,
     )
     db.add(summary_msg)
-    session.status = SessionStatus.COMPLETED
-    session.summary = summary_content
+    try:
+        session.complete(summary_content)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     db.commit()
     db.refresh(session)
     return session

@@ -2,9 +2,11 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 import models
 from database import SessionLocal, engine
+from domain.exceptions import DomainError
 from routers import ai_analysis, coaching, habits, monthly_reviews, notifications, persistent_todos, reviews, scheduled_todos, settings, subtasks, templates
 
 models.Base.metadata.create_all(bind=engine)
@@ -32,6 +34,14 @@ app.include_router(subtasks.router)
 app.include_router(settings.router)
 app.include_router(coaching.router)
 app.include_router(notifications.router)
+
+
+@app.exception_handler(DomainError)
+async def domain_error_handler(request, exc: DomainError):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc)}
+    )
 
 
 @app.get("/health")
