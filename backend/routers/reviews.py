@@ -10,6 +10,7 @@ from database import SessionLocal
 from domain.enums import KPTType
 from domain.exceptions import AggregateNotFoundError, BusinessRuleViolationError
 from domain.value_objects import WeekPeriod
+from repositories.weekly_review_repository import WeeklyReviewRepository
 from services.weekly_stats import (
     get_achievement_rate_vs_last_week,
     get_last_week_try_completion,
@@ -36,11 +37,8 @@ def require_user(x_user_email: Optional[str] = Header(None)) -> str:
 def get_or_create_review(
     db: Session, user_email: str, week_start: datetime.date
 ) -> models.WeeklyReview:
-    review = (
-        db.query(models.WeeklyReview)
-        .filter_by(user_id=user_email, week_start_date=week_start)
-        .first()
-    )
+    repo = WeeklyReviewRepository(db)
+    review = repo.find_by_user_and_week(user_email, week_start)
     if not review:
         review = models.WeeklyReview(user_id=user_email, week_start_date=week_start)
         db.add(review)
@@ -182,12 +180,8 @@ def list_reviews(
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
 ):
-    return (
-        db.query(models.WeeklyReview)
-        .filter_by(user_id=user_email)
-        .order_by(models.WeeklyReview.week_start_date.desc())
-        .all()
-    )
+    repo = WeeklyReviewRepository(db)
+    return repo.find_all_by_user(user_email)
 
 
 @router.get("/weekly/{week_start_date}", response_model=WeeklyReviewWithStatsOut)

@@ -13,6 +13,7 @@ from database import SessionLocal
 from domain.enums import GoalStatus, SessionStatus
 from domain.exceptions import InvalidStateTransitionError
 from domain.value_objects import WeekPeriod
+from repositories.coaching_session_repository import CoachingSessionRepository
 from services.coaching_context import build_coaching_context, build_message_context, build_system_prompt
 
 router = APIRouter(prefix="/coaching", tags=["coaching"])
@@ -122,13 +123,8 @@ def list_sessions(
     db: Session = Depends(get_db),
     user_email: str = Depends(require_user),
 ):
-    sessions = (
-        db.query(models.CoachingSession)
-        .filter_by(user_id=user_email)
-        .order_by(models.CoachingSession.created_at.desc())
-        .all()
-    )
-    return sessions
+    repo = CoachingSessionRepository(db)
+    return repo.find_by_user(user_email)
 
 
 @router.get("/sessions/current", response_model=CoachingSessionOut)
