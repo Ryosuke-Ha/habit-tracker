@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Dedicated "+" button next to the subtask input field for adding subtasks (in addition to the existing Enter key method)
+- Unit tests for domain value objects (`WeekPeriod`, `YearMonth`, `ScheduledTime`, `AchievementRate`) in `backend/tests/domain/test_value_objects.py`
+- Dedicated "+ " button next to the subtask input field for adding subtasks (in addition to the existing Enter key method)
 - Optimistic UI for subtask creation — subtask appears instantly and is reconciled after the server responds
 - Optimistic UI for adding new habits/persistent TODOs via the modal — items appear instantly before server confirmation
 - Double-submit prevention on the add-item modal and subtask add button
