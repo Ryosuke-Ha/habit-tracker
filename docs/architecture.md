@@ -132,9 +132,13 @@ All backend requests are made directly from client components using `fetch`. The
 
 ```
 backend/
-├── main.py          # FastAPI app, CORS config, router registration
-├── models.py        # SQLAlchemy ORM models
+├── main.py          # FastAPI app, CORS config, router registration, global exception handlers
+├── models.py        # SQLAlchemy ORM models with domain behavior methods
 ├── database.py      # Engine, SessionLocal, get_db dependency
+├── domain/
+│   ├── enums.py             # Domain enumerations (GoalStatus, KPTType, SessionStatus)
+│   ├── exceptions.py        # Domain exception hierarchy (DomainError, InvalidStateTransitionError, etc.)
+│   └── value_objects.py     # Value objects (WeekPeriod, YearMonth, ScheduledTime, AchievementRate)
 ├── routers/
 │   ├── templates.py         # Template CRUD
 │   ├── habits.py            # Habit CRUD + daily log toggling
@@ -142,11 +146,38 @@ backend/
 │   ├── subtasks.py          # Subtask management
 │   ├── reviews.py           # Weekly KPT reviews
 │   ├── monthly_reviews.py   # Monthly reviews + stats
+│   ├── coaching.py          # AI coaching sessions
 │   └── settings.py          # Key-value user settings
 └── alembic/
     ├── env.py
     └── versions/            # Migration scripts
 ```
+
+### Domain Layer
+
+The backend uses a lightweight domain-driven design approach. Business logic and state transition rules are encapsulated in the ORM model classes rather than being scattered across router handlers.
+
+**Domain Exceptions** (`domain/exceptions.py`)
+
+A hierarchy of domain-specific exceptions that map to HTTP 400 responses via a global FastAPI exception handler:
+
+| Exception | Purpose |
+|-----------|--------|
+| `DomainError` | Base exception for all domain rule violations |
+| `InvalidStateTransitionError` | Raised when an invalid state transition is attempted (e.g. completing an already-completed session) |
+| `AggregateNotFoundError` | Raised when a child entity is not found within its aggregate root |
+| `BusinessRuleViolationError` | Raised when a general business rule is violated (e.g. empty content) |
+
+**Domain Behavior on Models**
+
+ORM models encapsulate domain logic through behavior methods instead of exposing raw field manipulation to routers:
+
+| Model | Methods | Purpose |
+|-------|---------|--------|
+| `DailyLog` | `check()`, `uncheck()`, `toggle()`, `is_accomplished` | Habit completion state management |
+| `WeeklyReview` | `add_kpt_item()`, `find_kpt_item()`, `get_items_by_type()` | Aggregate root for KPT items with content validation |
+| `CoachingSession` | `complete()`, `add_message()`, `is_completed`, `is_in_progress`, `message_count` | Session lifecycle with state transition guards |
+| `CoachingGoal` | `complete()`, `abandon()`, `reactivate()`, `is_active` | Goal status transitions with validation |
 
 ### Router Organization
 
@@ -160,7 +191,12 @@ Each router is mounted with a `/api` prefix in `main.py`. All endpoints identify
 | `subtasks` | `/api/subtasks` | Sub-items for habits and persistent todos |
 | `reviews` | `/api/reviews` | Weekly KPT review CRUD |
 | `monthly_reviews` | `/api/monthly-reviews` | Monthly review + achievement stats |
+| `coaching` | `/api/coaching` | AI coaching sessions and goals |
 | `settings` | `/api/settings` | User preference key-value store |
+
+### Global Exception Handling
+
+Domain exceptions are caught by a global FastAPI exception handler registered in `main.py`. Any `DomainError` (or subclass) raised during request processing is automatically converted to an HTTP 400 response with a JSON body containing the error message. This keeps router code clean — routers can let domain exceptions propagate naturally or catch specific subtypes when additional context is needed.
 
 ### Database Access Pattern
 

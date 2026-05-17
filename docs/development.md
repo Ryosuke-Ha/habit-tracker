@@ -135,6 +135,8 @@ habit-tracker/
 │
 ├── backend/                    # FastAPI application (Python 3.11)
 │   ├── domain/                 # Domain layer
+│   │   ├── enums.py            # Domain enumerations (GoalStatus, KPTType, SessionStatus)
+│   │   ├── exceptions.py       # Domain exception hierarchy (DomainError and subclasses)
 │   │   └── value_objects.py    # Value objects (WeekPeriod, YearMonth, ScheduledTime, AchievementRate)
 │   ├── routers/                # One file per resource group
 │   │   ├── templates.py
@@ -143,9 +145,10 @@ habit-tracker/
 │   │   ├── subtasks.py
 │   │   ├── reviews.py
 │   │   ├── monthly_reviews.py
+│   │   ├── coaching.py
 │   │   └── settings.py
-│   ├── main.py                 # App factory, CORS, router registration
-│   ├── models.py               # SQLAlchemy ORM models
+│   ├── main.py                 # App factory, CORS, router registration, global exception handlers
+│   ├── models.py               # SQLAlchemy ORM models with domain behavior methods
 │   ├── database.py             # Engine, SessionLocal, get_db dependency
 │   ├── alembic/                # Migration scripts
 │   │   └── versions/           # One .py file per migration
@@ -155,7 +158,8 @@ habit-tracker/
 │       ├── test_habits.py
 │       ├── test_logs.py
 │       └── domain/
-│           └── test_value_objects.py  # Unit tests for domain value objects
+│           ├── test_value_objects.py  # Unit tests for domain value objects
+│           └── test_models.py        # Unit tests for domain model behavior
 │
 ├── slack-bot/                  # Slack Auto-Fix Bot (Python)
 │   ├── agent/
@@ -310,6 +314,7 @@ Current test files:
 | `tests/test_habits.py` | Habit CRUD endpoints |
 | `tests/test_logs.py` | Daily log creation and toggle |
 | `tests/domain/test_value_objects.py` | Domain value objects (`WeekPeriod`, `YearMonth`, `ScheduledTime`, `AchievementRate`) |
+| `tests/domain/test_models.py` | Domain model behavior (`CoachingSession`, `CoachingGoal`, `DailyLog`, `WeeklyReview` state transitions and validation) |
 
 The `conftest.py` fixture overrides the `get_db` dependency with an in-memory SQLite session and recreates the schema before each test, so tests are fully isolated with no shared state.
 
@@ -588,6 +593,8 @@ The backend allows requests only from `FRONTEND_URL`. Make sure:
 - Keep each router file focused on one resource group
 - Use Pydantic models for all request/response schemas
 - Add the `X-User-Email` dependency to any endpoint that operates on user-owned data
+- Encapsulate domain logic (state transitions, validation, aggregate boundary enforcement) in ORM model methods rather than in router handlers
+- Raise domain exceptions (`InvalidStateTransitionError`, `BusinessRuleViolationError`, `AggregateNotFoundError`) for business rule violations — the global exception handler converts them to HTTP 400 responses
 
 ### Documentation update policy
 
@@ -600,5 +607,6 @@ The backend allows requests only from `FRONTEND_URL`. Make sure:
 
 - **Backend:** every new router endpoint should have at least one happy-path test and one error-path test in `backend/tests/`
 - **Backend:** domain value objects and business logic should have unit tests in `backend/tests/domain/`
+- **Backend:** domain model behavior (state transitions, validation, aggregate operations) should have unit tests in `backend/tests/domain/test_models.py`
 - **Frontend:** add a test in `frontend/tests/` for any new component that contains non-trivial logic (conditional rendering, event handlers)
 - Run the full test suite locally before opening a PR — CI will catch failures, but it's faster to fix them before pushing

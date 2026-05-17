@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Domain exception hierarchy (`DomainError`, `InvalidStateTransitionError`, `AggregateNotFoundError`, `BusinessRuleViolationError`) in `backend/domain/exceptions.py`
+- Global `DomainError` exception handler in FastAPI — all domain exceptions return HTTP 400 with a JSON `detail` message
+- Domain behavior methods on `DailyLog` model: `check()`, `uncheck()`, `toggle()`, and `is_accomplished` property
+- Domain behavior methods on `WeeklyReview` model: `add_kpt_item()`, `find_kpt_item()`, and `get_items_by_type()` — KPT items are now created through the aggregate root with content validation
+- Domain behavior methods on `CoachingSession` model: `complete()`, `add_message()`, `is_completed`, `is_in_progress`, and `message_count` properties — enforces state transition rules (e.g. cannot add messages to a completed session)
+- Domain behavior methods on `CoachingGoal` model: `complete()`, `abandon()`, `reactivate()`, and `is_active` property — enforces valid state transitions between active, completed, and abandoned
+- Unit tests for domain model behavior (`CoachingSession`, `CoachingGoal`, `DailyLog`, `WeeklyReview`) in `backend/tests/domain/test_models.py`
 - Unit tests for domain value objects (`WeekPeriod`, `YearMonth`, `ScheduledTime`, `AchievementRate`) in `backend/tests/domain/test_value_objects.py`
 - Dedicated "+ " button next to the subtask input field for adding subtasks (in addition to the existing Enter key method)
 - Optimistic UI for subtask creation — subtask appears instantly and is reconciled after the server responds
@@ -31,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Coaching session message sending now uses `CoachingSession.add_message()` domain method instead of directly constructing `CoachingMessage` — enforces state transition rules at the model layer
+- Coaching session completion now uses `CoachingSession.complete()` domain method instead of directly setting `status` and `summary` fields
+- Weekly review KPT item creation now uses `WeeklyReview.add_kpt_item()` domain method instead of directly constructing `KPTItem` — enforces content validation at the model layer
+- Daily log toggle now uses `DailyLog.toggle()` domain method instead of directly flipping `is_checked`
 - AI analysis endpoints (weekly and monthly) now use `claude-haiku-4-5-20251001` model instead of `claude-opus-4-6` with a reduced max token limit of 800 (down from 1500)
 - Coaching endpoint `call_claude` max token limit reduced from 1500 to 500
 - `GET /logs/today` and `POST /logs/standalone` now determine "today" using JST (UTC+9) instead of the server's local date
