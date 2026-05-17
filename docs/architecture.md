@@ -139,6 +139,11 @@ backend/
 │   ├── enums.py             # Domain enumerations (GoalStatus, KPTType, SessionStatus)
 │   ├── exceptions.py        # Domain exception hierarchy (DomainError, InvalidStateTransitionError, etc.)
 │   └── value_objects.py     # Value objects (WeekPeriod, YearMonth, ScheduledTime, AchievementRate)
+├── repositories/
+│   ├── base.py                          # Generic BaseRepository with common CRUD operations
+│   ├── coaching_session_repository.py   # CoachingSession data access
+│   ├── daily_log_repository.py          # DailyLog data access
+│   └── weekly_review_repository.py      # WeeklyReview data access
 ├── routers/
 │   ├── templates.py         # Template CRUD
 │   ├── habits.py            # Habit CRUD + daily log toggling
@@ -179,6 +184,38 @@ ORM models encapsulate domain logic through behavior methods instead of exposing
 | `CoachingSession` | `complete()`, `add_message()`, `is_completed`, `is_in_progress`, `message_count` | Session lifecycle with state transition guards |
 | `CoachingGoal` | `complete()`, `abandon()`, `reactivate()`, `is_active` | Goal status transitions with validation |
 
+### Repository Layer
+
+The repository layer encapsulates database query logic, separating data access concerns from router handlers. Each repository extends a generic `BaseRepository` that provides common CRUD operations.
+
+**BaseRepository** (`repositories/base.py`)
+
+A generic base class parameterized by the ORM model type, providing:
+
+| Method | Description |
+|--------|------------|
+| `find_by_id(id)` | Find a single entity by primary key |
+| `save(entity)` | Add and commit an entity (insert or update) |
+| `delete(entity)` | Delete and commit an entity |
+| `find_all()` | Return all entities of the model type |
+
+**Specialized Repositories**
+
+| Repository | Model | Key Methods |
+|------------|-------|-------------|
+| `CoachingSessionRepository` | `CoachingSession` | `find_by_user`, `find_current_by_user`, `find_latest_completed_by_user`, `find_recent_messages` |
+| `DailyLogRepository` | `DailyLog` | `find_by_date_and_template`, `find_by_week`, `find_by_habit_and_date`, `count_checked_in_week` |
+| `WeeklyReviewRepository` | `WeeklyReview` | `find_by_user_and_week`, `find_current_by_user`, `find_previous_by_user`, `find_all_by_user`, `get_try_items_for_display` |
+
+Repositories are instantiated per-request within router handlers, receiving the SQLAlchemy `Session` via dependency injection:
+
+```python
+@router.get("/sessions")
+def list_sessions(db: Session = Depends(get_db), user_email: str = Depends(require_user)):
+    repo = CoachingSessionRepository(db)
+    return repo.find_by_user(user_email)
+```
+
 ### Router Organization
 
 Each router is mounted with a `/api` prefix in `main.py`. All endpoints identify the requesting user via the `X-User-Email` header — the backend performs an upsert on the `users` table so unknown emails are automatically registered on first request.
@@ -200,13 +237,20 @@ Domain exceptions are caught by a global FastAPI exception handler registered in
 
 ### Database Access Pattern
 
-All routes use FastAPI's dependency injection to obtain a SQLAlchemy `Session`:
+Routes use FastAPI's dependency injection to obtain a SQLAlchemy `Session`. For simple queries, inline SQLAlchemy usage remains. For more complex or reusable queries, repository classes encapsulate the data access logic:
 
 ```python
+# Simple inline query (still used in some routers)
 @router.get("/")
 def get_items(db: Session = Depends(get_db), user_email: str = Header(...)):
     user = get_or_create_user(db, user_email)
     return db.query(Item).filter(Item.user_id == user.id).all()
+
+# Repository-based query
+@router.get("/sessions")
+def list_sessions(db: Session = Depends(get_db), user_email: str = Depends(require_user)):
+    repo = CoachingSessionRepository(db)
+    return repo.find_by_user(user_email)
 ```
 
 `get_db` yields a session and ensures it is closed after the request, whether or not an exception occurs.

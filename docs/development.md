@@ -138,6 +138,11 @@ habit-tracker/
 │   │   ├── enums.py            # Domain enumerations (GoalStatus, KPTType, SessionStatus)
 │   │   ├── exceptions.py       # Domain exception hierarchy (DomainError and subclasses)
 │   │   └── value_objects.py    # Value objects (WeekPeriod, YearMonth, ScheduledTime, AchievementRate)
+│   ├── repositories/           # Repository layer — encapsulates database queries
+│   │   ├── base.py             # Generic BaseRepository with CRUD operations
+│   │   ├── coaching_session_repository.py  # CoachingSession queries
+│   │   ├── daily_log_repository.py         # DailyLog queries
+│   │   └── weekly_review_repository.py     # WeeklyReview queries
 │   ├── routers/                # One file per resource group
 │   │   ├── templates.py
 │   │   ├── habits.py
@@ -157,9 +162,11 @@ habit-tracker/
 │       ├── test_templates.py
 │       ├── test_habits.py
 │       ├── test_logs.py
-│       └── domain/
-│           ├── test_value_objects.py  # Unit tests for domain value objects
-│           └── test_models.py        # Unit tests for domain model behavior
+│       ├── domain/
+│       │   ├── test_value_objects.py  # Unit tests for domain value objects
+│       │   └── test_models.py        # Unit tests for domain model behavior
+│       └── repositories/
+│           └── test_repositories.py  # Unit tests for repository classes
 │
 ├── slack-bot/                  # Slack Auto-Fix Bot (Python)
 │   ├── agent/
@@ -298,6 +305,9 @@ pytest tests/test_habits.py::test_create_habit
 # Run domain unit tests only
 pytest tests/domain/
 
+# Run repository unit tests only
+pytest tests/repositories/
+
 # Coverage only (no terminal output for tests)
 pytest --cov=. --cov-report=term-missing
 
@@ -315,8 +325,9 @@ Current test files:
 | `tests/test_logs.py` | Daily log creation and toggle |
 | `tests/domain/test_value_objects.py` | Domain value objects (`WeekPeriod`, `YearMonth`, `ScheduledTime`, `AchievementRate`) |
 | `tests/domain/test_models.py` | Domain model behavior (`CoachingSession`, `CoachingGoal`, `DailyLog`, `WeeklyReview` state transitions and validation) |
+| `tests/repositories/test_repositories.py` | Repository classes (`DailyLogRepository`, `WeeklyReviewRepository`, `CoachingSessionRepository` query methods and business logic) |
 
-The `conftest.py` fixture overrides the `get_db` dependency with an in-memory SQLite session and recreates the schema before each test, so tests are fully isolated with no shared state.
+The `conftest.py` fixture overrides the `get_db` dependency with an in-memory SQLite session and recreates the schema before each test, so tests are fully isolated with no shared state. Repository tests use mock `Session` objects to test query construction and business logic independently of the database.
 
 ### Linting
 
@@ -594,6 +605,7 @@ The backend allows requests only from `FRONTEND_URL`. Make sure:
 - Use Pydantic models for all request/response schemas
 - Add the `X-User-Email` dependency to any endpoint that operates on user-owned data
 - Encapsulate domain logic (state transitions, validation, aggregate boundary enforcement) in ORM model methods rather than in router handlers
+- Encapsulate reusable database queries in repository classes under `backend/repositories/` — extend `BaseRepository` for common CRUD and add domain-specific query methods
 - Raise domain exceptions (`InvalidStateTransitionError`, `BusinessRuleViolationError`, `AggregateNotFoundError`) for business rule violations — the global exception handler converts them to HTTP 400 responses
 
 ### Documentation update policy
@@ -608,5 +620,6 @@ The backend allows requests only from `FRONTEND_URL`. Make sure:
 - **Backend:** every new router endpoint should have at least one happy-path test and one error-path test in `backend/tests/`
 - **Backend:** domain value objects and business logic should have unit tests in `backend/tests/domain/`
 - **Backend:** domain model behavior (state transitions, validation, aggregate operations) should have unit tests in `backend/tests/domain/test_models.py`
+- **Backend:** repository classes should have unit tests in `backend/tests/repositories/` verifying query logic and business methods
 - **Frontend:** add a test in `frontend/tests/` for any new component that contains non-trivial logic (conditional rendering, event handlers)
 - Run the full test suite locally before opening a PR — CI will catch failures, but it's faster to fix them before pushing

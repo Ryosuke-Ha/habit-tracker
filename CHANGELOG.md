@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Repository layer with `BaseRepository` generic base class providing common CRUD operations (`find_by_id`, `save`, `delete`, `find_all`) in `backend/repositories/base.py`
+- `CoachingSessionRepository` with methods for querying coaching sessions: `find_by_user`, `find_current_by_user`, `find_latest_completed_by_user`, and `find_recent_messages`
+- `DailyLogRepository` with methods for querying daily logs: `find_by_date_and_template`, `find_by_week`, `find_by_habit_and_date`, and `count_checked_in_week`
+- `WeeklyReviewRepository` with methods for querying weekly reviews: `find_by_user_and_week`, `find_current_by_user`, `find_previous_by_user`, `find_all_by_user`, and `get_try_items_for_display`
+- Unit tests for repository classes (`DailyLogRepository`, `WeeklyReviewRepository`, `CoachingSessionRepository`) in `backend/tests/repositories/test_repositories.py`
 - Domain exception hierarchy (`DomainError`, `InvalidStateTransitionError`, `AggregateNotFoundError`, `BusinessRuleViolationError`) in `backend/domain/exceptions.py`
 - Global `DomainError` exception handler in FastAPI — all domain exceptions return HTTP 400 with a JSON `detail` message
 - Domain behavior methods on `DailyLog` model: `check()`, `uncheck()`, `toggle()`, and `is_accomplished` property
@@ -38,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Coaching session listing (`GET /coaching/sessions`) now uses `CoachingSessionRepository.find_by_user()` instead of inline SQLAlchemy queries, and results are sorted by `session_date` descending instead of `created_at` descending
+- Weekly review listing (`GET /reviews/weekly`) now uses `WeeklyReviewRepository.find_all_by_user()` instead of inline SQLAlchemy queries
+- Weekly review lookup in `get_or_create_review` helper now uses `WeeklyReviewRepository.find_by_user_and_week()` instead of inline SQLAlchemy queries
 - Coaching session message sending now uses `CoachingSession.add_message()` domain method instead of directly constructing `CoachingMessage` — enforces state transition rules at the model layer
 - Coaching session completion now uses `CoachingSession.complete()` domain method instead of directly setting `status` and `summary` fields
 - Weekly review KPT item creation now uses `WeeklyReview.add_kpt_item()` domain method instead of directly constructing `KPTItem` — enforces content validation at the model layer
