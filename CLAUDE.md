@@ -131,3 +131,36 @@ This reduces token consumption and improves response quality.
 
 See `.env.example` files in each directory for required variables.
 Never commit actual values. Use Railway/Vercel dashboard for production secrets.
+
+## Development Workflow
+
+### Branch Strategy
+- main: production branch（直接push禁止）
+- feature/issue-{番号}-{概要}: 新機能
+- fix/issue-{番号}-{概要}: バグ修正
+- refactor/issue-{番号}-{概要}: リファクタリング
+
+### Flow
+1. GitHub Issueを作成（要件定義・設計・工数見積もり）
+2. ブランチを作成: feature/issue-{番号}-{概要}
+3. 実装（Claude Codeに「Issue #〇〇を実装して」と投げる）
+4. PRを作成（Issueと紐づけ: closes #〇〇）
+5. CIが通ることを確認
+6. mainへマージ → 自動デプロイ
+
+### When to Skip Full Flow
+軽微な修正（設計書更新不要）:
+- UIの微調整・文言変更
+- バグ修正（影響範囲が明確）
+- テストの追加
+
+フルフロー必須:
+- 新しいAPIエンドポイント
+- DBスキーマの変更
+- 複数コンポーネントにまたがる変更
+
+### Claude Code Usage
+実装時は以下の形式でClaude Codeに投げる:
+「Issue #〇〇を実装してください。
+ 設計はIssueのコメントを参照してください。
+ CLAUDE.mdのルールに従ってください。」
