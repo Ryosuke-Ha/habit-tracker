@@ -164,3 +164,13 @@ Never commit actual values. Use Railway/Vercel dashboard for production secrets.
 「Issue #〇〇を実装してください。
  設計はIssueのコメントを参照してください。
  CLAUDE.mdのルールに従ってください。」
+
+## Multi-Agent Development
+
+マルチエージェント開発の手順は .claude/agents.mdを参照すること。
+タスクの進捗は .claude/progress.mdで管理する。
+
+### セッション開始時の必須確認
+1. .claude/memory.mdを読む（重要な決定事項・技術的負債）
+2. .claude/progress.mdを読む（現在のタスク状況）
+3. 該当するCLAUDE.mdを読む（backend/またはfrontend/）
