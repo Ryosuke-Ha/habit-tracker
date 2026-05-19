@@ -1,4 +1,4 @@
-TOOLS = [
+GITHUB_TOOLS = [
     {
         "name": "get_file_content",
         "description": "GitHubリポジトリから指定ファイルの内容を取得",
@@ -143,6 +143,111 @@ TOOLS = [
                 }
             },
             "required": ["message"],
+        },
+    },
+]
+
+HABIT_TOOLS = [
+    {
+        "name": "get_today_habits",
+        "description": "今日の習慣一覧を取得する。今日やること、習慣リストを確認する場合に使う。",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "check_habit",
+        "description": "習慣名を指定してチェックする。「筋トレをチェック」「英語学習を完了」などの場合に使う。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "habit_title": {
+                    "type": "string",
+                    "description": "チェックする習慣のタイトル（部分一致で検索）",
+                }
+            },
+            "required": ["habit_title"],
+        },
+    },
+    {
+        "name": "get_achievement_rate",
+        "description": "今週の習慣達成率を取得する。先週比・最強/最弱習慣も含む。",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "add_scheduled_todo",
+        "description": "特定の日付のTODOメモを追加する。「明日の歯医者」「来週の会議」などの場合に使う。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "TODOのタイトル"},
+                "date": {"type": "string", "description": "日付（YYYY-MM-DD形式）"},
+                "time": {"type": "string", "description": "時刻（HH:MM形式、任意）"},
+                "location": {"type": "string", "description": "場所（任意）"},
+            },
+            "required": ["title", "date"],
+        },
+    },
+    {
+        "name": "add_persistent_todo",
+        "description": "完了するまで毎日表示される持ち越しTODOを追加する。「〇〇をやること」などの場合に使う。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "TODOのタイトル"},
+                "time": {"type": "string", "description": "時刻（HH:MM形式、任意）"},
+                "location": {"type": "string", "description": "場所（任意）"},
+            },
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "get_weekly_kpt",
+        "description": "今週のKPT（Keep/Problem/Try）振り返りを取得する。",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "add_kpt_item",
+        "description": "今週のKPTにアイテムを追加する。「Keepに〇〇を追加」などの場合に使う。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kpt_type": {
+                    "type": "string",
+                    "enum": ["keep", "problem", "try"],
+                    "description": "KPTの種別",
+                },
+                "content": {"type": "string", "description": "追加する内容"},
+            },
+            "required": ["kpt_type", "content"],
+        },
+    },
+    {
+        "name": "get_monthly_stats",
+        "description": "今月の達成率・streak・週ごとの達成率を取得する。",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "get_today_summary",
+        "description": "今日のサマリーを取得する。習慣・TODO・持ち越しTODOを一覧表示する場合に使う。",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
         },
     },
 ]

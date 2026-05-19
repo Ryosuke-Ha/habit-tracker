@@ -2,29 +2,36 @@ import json
 
 import anthropic
 
-from agent.tools import TOOLS
+import habit_tools
+from agent.tools import GITHUB_TOOLS, HABIT_TOOLS
 from config import ANTHROPIC_API_KEY
 
-SYSTEM_PROMPT = """あなたはhabit-trackerアプリの完全自律型修正エージェントです。
+SYSTEM_PROMPT = """あなたはhabit-trackerの自律型エージェントです。
 ユーザーからの要望を受け取ったら、人間の確認や追加指示を一切待たずに、
-以下の全ステップをツールを使って自律的に実行してください。
+ツールを使って自律的に実行してください。
 
 【重要ルール】
 - 絶対にユーザーへの確認や承認を求めないこと
-- 修正方針を報告した後も必ず次のステップに進むこと
 - テキストで回答するのは全ステップ完了後の最終報告のみ
 - 進捗報告は必ず post_slack_message ツールを使うこと（テキスト出力は不可）
 - エラーが発生した場合のみ post_slack_message で報告して作業を停止すること
 
-【実行ステップ（必ず全て完遂すること）】
-1. list_files / get_file_content / search_code で関連ファイルを調査する
-2. post_slack_message で修正方針を報告する（ここで止まらず即座に次へ進む）
-3. create_branch でブランチを作成する（fix/YYYYMMDD-HHMMSS または feat/YYYYMMDD-HHMMSS）
-4. create_or_update_file でファイルを修正してコミットする
-5. create_pull_request でPRを作成し、post_slack_message でURLを報告する
-6. get_pr_status でCIステータスを確認する（pending なら再度呼び出す、最大20回）
-7. CIが success になったら merge_pull_request でマージする
-8. post_slack_message で完了を報告する
+【タスクの種別】
+1. データ操作タスク（習慣・TODO・振り返り）
+   「習慣をチェック」「達成率を確認」「TODOを追加」「KPTを見せて」など
+   → HABIT_TOOLSを使用し、結果を日本語でSlackに報告する
+
+2. コード修正タスク（バグ修正・機能追加）
+   「バグを直して」「機能を追加して」などの開発関連
+   → 以下のステップを全て完遂すること:
+   1. list_files / get_file_content / search_code で関連ファイルを調査する
+   2. post_slack_message で修正方針を報告する（ここで止まらず即座に次へ進む）
+   3. create_branch でブランチを作成する（fix/YYYYMMDD-HHMMSS または feat/YYYYMMDD-HHMMSS）
+   4. create_or_update_file でファイルを修正してコミットする
+   5. create_pull_request でPRを作成し、post_slack_message でURLを報告する
+   6. get_pr_status でCIステータスを確認する（pending なら再度呼び出す、最大20回）
+   7. CIが success になったら merge_pull_request でマージする
+   8. post_slack_message で完了を報告する
 
 【CIポーリング】
 - get_pr_status は1回呼ぶたびに30秒待機してから結果を返す
@@ -36,6 +43,8 @@ MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 8096
 CI_POLL_INTERVAL_SECONDS = 30
 CI_MAX_POLLS = 20
+
+ALL_TOOLS = GITHUB_TOOLS + HABIT_TOOLS
 
 
 class Orchestrator:
@@ -55,7 +64,7 @@ class Orchestrator:
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
                     system=SYSTEM_PROMPT,
-                    tools=TOOLS,
+                    tools=ALL_TOOLS,
                     messages=messages,
                 )
 
@@ -138,6 +147,45 @@ class Orchestrator:
             elif name == "post_slack_message":
                 self._post(params["message"])
                 return {"ok": True}
+
+            elif name == "get_today_habits":
+                return habit_tools.get_today_habits()
+
+            elif name == "check_habit":
+                return habit_tools.check_habit(params["habit_title"])
+
+            elif name == "get_achievement_rate":
+                return habit_tools.get_achievement_rate()
+
+            elif name == "add_scheduled_todo":
+                return habit_tools.add_scheduled_todo(
+                    params["title"],
+                    params["date"],
+                    params.get("time"),
+                    params.get("location"),
+                )
+
+            elif name == "add_persistent_todo":
+                return habit_tools.add_persistent_todo(
+                    params["title"],
+                    params.get("time"),
+                    params.get("location"),
+                )
+
+            elif name == "get_weekly_kpt":
+                return habit_tools.get_weekly_kpt()
+
+            elif name == "add_kpt_item":
+                return habit_tools.add_kpt_item(
+                    params["kpt_type"],
+                    params["content"],
+                )
+
+            elif name == "get_monthly_stats":
+                return habit_tools.get_monthly_stats()
+
+            elif name == "get_today_summary":
+                return habit_tools.get_today_summary()
 
             else:
                 return {"error": f"Unknown tool: {name}"}
