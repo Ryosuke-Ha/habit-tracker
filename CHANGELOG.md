@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `backend/CLAUDE.md` — guidance file for Backend Worker Agent covering must-do/must-not rules, architecture guidelines, key files, and test commands
+- `frontend/CLAUDE.md` — guidance file for Frontend Worker Agent covering must-do/must-not rules, UI guidelines, key patterns, and test commands
+- GitHub issue templates for bug reports, feature requests, and refactoring proposals (`.github/ISSUE_TEMPLATE/bug.md`, `feature.md`, `refactor.md`)
+- GitHub pull request template (`.github/PULL_REQUEST_TEMPLATE.md`)
 - Repository layer with `BaseRepository` generic base class providing common CRUD operations (`find_by_id`, `save`, `delete`, `find_all`) in `backend/repositories/base.py`
 - `CoachingSessionRepository` with methods for querying coaching sessions: `find_by_user`, `find_current_by_user`, `find_latest_completed_by_user`, and `find_recent_messages`
 - `DailyLogRepository` with methods for querying daily logs: `find_by_date_and_template`, `find_by_week`, `find_by_habit_and_date`, and `count_checked_in_week`
