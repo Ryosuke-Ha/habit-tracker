@@ -120,7 +120,9 @@ Open http://localhost:3000 in your browser.
 
 ```
 habit-tracker/
+├── CLAUDE.md                   # Root-level guidance for Claude AI agents
 ├── frontend/                   # Next.js 14 application (TypeScript)
+│   ├── CLAUDE.md               # Frontend Worker Agent guidance
 │   ├── app/                    # App Router — pages and API routes
 │   │   ├── page.tsx            # Daily TODO dashboard (home)
 │   │   ├── login/              # Login page
@@ -134,6 +136,7 @@ habit-tracker/
 │   └── tests/                  # Jest + Testing Library test files
 │
 ├── backend/                    # FastAPI application (Python 3.11)
+│   ├── CLAUDE.md               # Backend Worker Agent guidance
 │   ├── domain/                 # Domain layer
 │   │   ├── enums.py            # Domain enumerations (GoalStatus, KPTType, SessionStatus)
 │   │   ├── exceptions.py       # Domain exception hierarchy (DomainError and subclasses)
@@ -177,6 +180,13 @@ habit-tracker/
 │   ├── config.py               # Environment variable loading
 │   ├── github_client.py        # PyGitHub wrapper
 │   └── main.py                 # Entry point (Slack Bolt + Socket Mode)
+│
+├── .github/
+│   ├── ISSUE_TEMPLATE/         # GitHub issue templates
+│   │   ├── bug.md              # Bug report template
+│   │   ├── feature.md          # Feature request template
+│   │   └── refactor.md         # Refactoring proposal template
+│   └── PULL_REQUEST_TEMPLATE.md # Pull request template
 │
 └── docs/                       # Project documentation
     ├── architecture.md         # System architecture and design decisions
@@ -607,6 +617,29 @@ The backend allows requests only from `FRONTEND_URL`. Make sure:
 - Encapsulate domain logic (state transitions, validation, aggregate boundary enforcement) in ORM model methods rather than in router handlers
 - Encapsulate reusable database queries in repository classes under `backend/repositories/` — extend `BaseRepository` for common CRUD and add domain-specific query methods
 - Raise domain exceptions (`InvalidStateTransitionError`, `BusinessRuleViolationError`, `AggregateNotFoundError`) for business rule violations — the global exception handler converts them to HTTP 400 responses
+
+### CLAUDE.md Files
+
+The repository contains `CLAUDE.md` files that provide guidance for Claude AI agents working on the codebase:
+
+| File | Purpose |
+|------|--------|
+| `CLAUDE.md` | Root-level guidance — project overview and general rules |
+| `backend/CLAUDE.md` | Backend Worker Agent guidance — must-do/must-not rules, architecture patterns, key files, and test commands |
+| `frontend/CLAUDE.md` | Frontend Worker Agent guidance — must-do/must-not rules, UI guidelines, key patterns, and test commands |
+
+When updating development conventions, architecture rules, or key file locations, keep the relevant `CLAUDE.md` file(s) in sync.
+
+### GitHub Templates
+
+The repository includes templates for issues and pull requests:
+
+| Template | Path | Purpose |
+|----------|------|--------|
+| Bug Report | `.github/ISSUE_TEMPLATE/bug.md` | Structured bug report with reproduction steps |
+| Feature Request | `.github/ISSUE_TEMPLATE/feature.md` | Feature proposal template |
+| Refactoring | `.github/ISSUE_TEMPLATE/refactor.md` | Refactoring proposal template |
+| Pull Request | `.github/PULL_REQUEST_TEMPLATE.md` | PR description template with checklist |
 
 ### Documentation update policy
 
