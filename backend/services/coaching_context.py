@@ -72,7 +72,12 @@ def build_coaching_context(user_id: str, db: Session) -> dict:
             for i in prev_review.kpt_items if i.type == "try"
         ][:3]
 
-    active_goals = db.query(models.CoachingGoal).filter_by(user_id=user_id, status=GoalStatus.ACTIVE).all()
+    active_goals = (
+        db.query(models.CoachingGoal)
+        .filter_by(user_id=user_id, status=GoalStatus.ACTIVE)
+        .limit(3)
+        .all()
+    )
     goals_data = [{"id": g.id, "title": g.title} for g in active_goals]
 
     prev_session = (
@@ -81,7 +86,8 @@ def build_coaching_context(user_id: str, db: Session) -> dict:
         .order_by(models.CoachingSession.created_at.desc())
         .first()
     )
-    prev_summary: Optional[str] = prev_session.summary if prev_session else None
+    raw_summary: Optional[str] = prev_session.summary if prev_session else None
+    prev_summary: Optional[str] = raw_summary[:300] if raw_summary else None
 
     return {
         "achievement": {
