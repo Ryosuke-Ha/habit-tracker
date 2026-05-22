@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 import models
 from database import get_db
+from services.domain.daily_log_service import DailyLogGenerationService
 
 router = APIRouter()
 
@@ -150,15 +151,9 @@ def delete_habit(habit_id: int, db: Session = Depends(get_db)):
     if not habit:
         raise HTTPException(status_code=404, detail="Habit not found")
 
-    # Detach existing DailyLogs: copy habit data to standalone fields, nullify habit_id
-    logs = db.query(models.DailyLog).filter(models.DailyLog.habit_id == habit_id).all()
-    for log in logs:
-        log.title = habit.title
-        log.scheduled_time = habit.scheduled_time
-        log.location = habit.location
-        log.template_id = habit.template_id
-        log.habit_id = None
-    db.flush()
+    # Detach existing DailyLogs via DailyLogGenerationService
+    gen_service = DailyLogGenerationService(db)
+    gen_service.detach_logs_from_habit(habit)
 
     db.delete(habit)
     db.commit()
