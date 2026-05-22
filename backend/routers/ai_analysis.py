@@ -10,8 +10,11 @@ from sqlalchemy.orm import Session
 
 import models
 from database import SessionLocal
-from domain.value_objects import YearMonth
-from services.weekly_stats import get_weekly_stats
+from domain.value_objects import WeekPeriod, YearMonth
+from services.domain.achievement_service import (
+    MonthlyAchievementService,
+    WeeklyAchievementService,
+)
 
 router = APIRouter(prefix="/reviews", tags=["ai-analysis"])
 
@@ -91,9 +94,9 @@ def generate_analysis(
     problem_items: list[str] = []
     try_items: list[str] = []
     if review:
-        keep_items = [i.content for i in review.kpt_items if i.type == "keep"]
-        problem_items = [i.content for i in review.kpt_items if i.type == "problem"]
-        try_items = [i.content for i in review.kpt_items if i.type == "try"]
+        keep_items = [i.content for i in review.kpt_items if i.type == "keep"][:3]
+        problem_items = [i.content for i in review.kpt_items if i.type == "problem"][:3]
+        try_items = [i.content for i in review.kpt_items if i.type == "try"][:3]
 
     # 先週のTryアイテムを取得
     prev_week_start = week_start - datetime.timedelta(days=7)
@@ -108,10 +111,15 @@ def generate_analysis(
             (i.content, i.is_completed)
             for i in prev_review.kpt_items
             if i.type == "try"
-        ]
+        ][:3]
 
-    # 今週の習慣達成率を計算
-    rate = get_weekly_stats(week_start, db)["achievement_rate"]
+    # 今週の習慣達成率・最弱・最強習慣を取得
+    weekly_service = WeeklyAchievementService(db)
+    week_period = WeekPeriod(week_start)
+    weekly_stats = weekly_service.get_weekly_stats(week_period)
+    rate = weekly_stats["achievement_rate"]
+    weakest_habit = weekly_stats.get("weakest_habit")
+    strongest_habit = weekly_stats.get("strongest_habit")
 
     # プロンプト組み立て
     keep_text = "\n".join(f"・{c}" for c in keep_items) if keep_items else "（なし）"
@@ -125,13 +133,18 @@ def generate_analysis(
         if prev_try_items
         else "（なし）"
     )
+    habit_insight = ""
+    if weakest_habit:
+        habit_insight += f"\n【最も苦手な習慣】{weakest_habit}"
+    if strongest_habit:
+        habit_insight += f"\n【最も達成できた習慣】{strongest_habit}"
 
     week_start_str = week_start.strftime("%Y/%m/%d")
     week_end_str = week_end.strftime("%Y/%m/%d")
 
     user_message = f"""以下は今週（{week_start_str}〜{week_end_str}）の振り返りデータです。
 
-【今週の達成率】{rate}%
+【今週の達成率】{rate}%{habit_insight}
 
 【Keep】{keep_text}
 
@@ -225,10 +238,8 @@ def generate_monthly_analysis(
     first_day = datetime.date(year, month, 1)
     last_day = datetime.date(year, month, calendar.monthrange(year, month)[1])
     today = datetime.date.today()
-    calc_until = min(last_day, today)
 
     # 月内のDailyLogsを取得
-    from collections import defaultdict
     logs = (
         db.query(models.DailyLog)
         .filter(
@@ -239,71 +250,40 @@ def generate_monthly_analysis(
         .all()
     )
 
-    # 日ごとに集計
-    date_logs: dict[datetime.date, list] = defaultdict(list)
-    for log in logs:
-        date_logs[log.date].append(log)
+    # MonthlyAchievementServiceで集計
+    monthly_service = MonthlyAchievementService(db)
+    stats = monthly_service.build_monthly_stats(year, month, logs, today)
 
-    daily_data: list[tuple[str, int, int]] = []  # (date_str, checked, total)
-    d = first_day
-    while d <= calc_until:
-        day_logs = date_logs[d]
-        total = len(day_logs)
-        checked = sum(1 for l in day_logs if l.is_checked)
-        daily_data.append((d.isoformat(), checked, total))
-        d += datetime.timedelta(days=1)
+    overall_rate = stats["overall_rate"]
+    current_streak = stats["current_streak"]
+    weekly_rates = stats["weekly_rates"]
+    low_achievement_count = stats["low_achievement_count"]
+    low_achievement_weekday = stats["low_achievement_weekday"]
 
-    # 全体達成率
-    total_all = sum(t for _, _, t in daily_data)
-    checked_all = sum(c for _, c, _ in daily_data)
-    overall_rate = round(checked_all / total_all * 100) if total_all > 0 else 0
+    # 週ごとの達成率テキスト
+    weekly_rates_text = "\n".join(
+        f"・{w['week_start']}週: {w['rate']}%"
+        for w in weekly_rates
+    )
 
-    # 週ごとの達成率
-    week_buckets: dict[datetime.date, list[tuple[int, int]]] = defaultdict(list)
-    for date_str, checked, total in daily_data:
-        dr_date = datetime.date.fromisoformat(date_str)
-        days_since_sunday = (dr_date.weekday() + 1) % 7
-        week_sun = dr_date - datetime.timedelta(days=days_since_sunday)
-        week_buckets[week_sun].append((checked, total))
-
-    weekly_rates_text = ""
-    for week_sun in sorted(week_buckets):
-        bucket = week_buckets[week_sun]
-        w_total = sum(t for _, t in bucket)
-        w_checked = sum(c for c, _ in bucket)
-        pct = round(w_checked / w_total * 100) if w_total > 0 else 0
-        weekly_rates_text += f"・{week_sun.strftime('%m/%d')}週: {pct}%\n"
-
-    # 連続達成日数
-    streak = 0
-    check_d = calc_until
-    while check_d >= first_day:
-        day_logs = date_logs[check_d]
-        if any(l.is_checked for l in day_logs):
-            streak += 1
-        else:
-            break
-        check_d -= datetime.timedelta(days=1)
-
-    # 達成率50%以下の日
-    low_days = [
-        f"{date_str}（{round(c/t*100)}%）"
-        for date_str, c, t in daily_data
-        if t > 0 and c / t <= 0.5
-    ]
-    low_achievement_text = "、".join(low_days) if low_days else "なし"
+    # 低達成日の傾向テキスト
+    if low_achievement_count == 0:
+        low_achievement_text = "なし"
+    elif low_achievement_weekday:
+        low_achievement_text = f"{low_achievement_count}日（{low_achievement_weekday}曜日が多い傾向）"
+    else:
+        low_achievement_text = f"{low_achievement_count}日"
 
     # プロンプト組み立て
     user_message = f"""以下は{year_month}の習慣達成データです。
 
 【月全体の達成率】{overall_rate}%
-【連続達成日数】{streak}日
+【連続達成日数】{current_streak}日
 
 【週ごとの達成率】
-{weekly_rates_text.strip()}
+{weekly_rates_text}
 
-【日ごとの達成率（低い日のみ抜粋）】
-達成率が50%以下の日: {low_achievement_text}
+【達成率50%以下の日】{low_achievement_text}
 
 以下を簡潔に教えてください（各項目2〜3行以内）:
 1. 今月の達成率への評価

@@ -4,7 +4,7 @@ import subprocess
 import anthropic
 from github import Github
 
-MAX_DIFF_CHARS = 50000
+MAX_DIFF_CHARS = 20000
 
 
 def get_pr_diff() -> str:
@@ -126,7 +126,17 @@ def main() -> None:
 
     print(f"差分サイズ: {len(diff)}文字")
     print("Claudeでレビュー中...")
-    review = review_with_claude(diff)
+    try:
+        review = review_with_claude(diff)
+    except anthropic.BadRequestError as e:
+        print(f"API BadRequestError: {e}")
+        review = "⚠️ AIレビューをスキップしました（APIリクエストエラー）"
+    except anthropic.APIStatusError as e:
+        print(f"API StatusError: {e}")
+        review = "⚠️ AIレビューをスキップしました（APIエラー）"
+    except Exception as e:
+        print(f"予期しないエラー: {e}")
+        review = "⚠️ AIレビューをスキップしました（予期しないエラー）"
 
     print("PRにコメントを投稿中...")
     post_review_comment(review)
