@@ -521,12 +521,21 @@ export default function Home() {
   const incompleteItems = allItems.filter((item) => !isDone(item));
   const doneItems = allItems.filter((item) => isDone(item));
 
-  // 認証チェック中 or バックエンドヘルスチェック中
+  // 認証チェック中 / 設定読み込み中 / バックエンドヘルスチェック中
   if (
     status === "loading" ||
-    (status === "authenticated" && healthStatus === "checking" && phase !== "content")
+    (status === "authenticated" && (!settingReady || (healthStatus === "checking" && phase !== "content")))
   ) {
-    return <div className="min-h-screen bg-black" />;
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <p
+          className="text-green-400 text-xs animate-pulse"
+          style={{ fontFamily: "'Press Start 2P', monospace" }}
+        >
+          LOADING...
+        </p>
+      </div>
+    );
   }
 
   // 未認証（useEffectでリダイレクト済み）
@@ -537,6 +546,20 @@ export default function Home() {
   // バックエンド障害中
   if (healthStatus === "unhealthy") {
     return <BackendError nextRetryIn={nextRetryIn} onRetry={checkHealth} />;
+  }
+
+  // 通常時のデータ取得中（2回目以降の起動でアニメーションなし）
+  if (phase !== "content" && !showAnimation) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <p
+          className="text-green-400 text-xs animate-pulse"
+          style={{ fontFamily: "'Press Start 2P', monospace" }}
+        >
+          LOADING...
+        </p>
+      </div>
+    );
   }
 
   return (
