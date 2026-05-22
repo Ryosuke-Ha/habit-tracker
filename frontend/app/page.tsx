@@ -7,7 +7,9 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 import { DailyLogEntry } from "@/components/HabitList";
 import TodoItem, { TodoEntry } from "@/components/TodoItem";
 import HamburgerMenu from "@/components/HamburgerMenu";
-import { useSetting } from "@/hooks/useSetting";
+import { useSetting } from "@/hooks/useSetting"
+import { useBackendHealth } from "@/hooks/useBackendHealth"
+import { BackendError } from "@/components/BackendError";
 
 interface Template { id: number; name: string; }
 
@@ -80,6 +82,7 @@ export default function Home() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { getSetting, setSetting, ready: settingReady } = useSetting();
+  const { status: healthStatus, nextRetryIn, checkHealth } = useBackendHealth();
   const [phase, setPhase] = useState<Phase>("initial");
   const [animationDone, setAnimationDone] = useState(false);
   const [dataReady, setDataReady] = useState(false);
@@ -127,6 +130,15 @@ export default function Home() {
   useEffect(() => {
     if (animationDone && dataReady) setPhase("content");
   }, [animationDone, dataReady]);
+
+  // バックエンド復旧時にデータを再フェッチ
+  useEffect(() => {
+    if (healthStatus === "healthy" && status === "authenticated" && phase === "loading" && settingReady) {
+      setDataReady(false);
+      fetchData();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [healthStatus]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) { if (e.key === "Escape") closeModal(); }
@@ -508,6 +520,47 @@ export default function Home() {
 
   const incompleteItems = allItems.filter((item) => !isDone(item));
   const doneItems = allItems.filter((item) => isDone(item));
+
+  // 認証チェック中 / 設定読み込み中 / バックエンドヘルスチェック中
+  if (
+    status === "loading" ||
+    (status === "authenticated" && (!settingReady || (healthStatus === "checking" && phase !== "content")))
+  ) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <p
+          className="text-green-400 text-xs animate-pulse"
+          style={{ fontFamily: "'Press Start 2P', monospace" }}
+        >
+          LOADING...
+        </p>
+      </div>
+    );
+  }
+
+  // 未認証（useEffectでリダイレクト済み）
+  if (status === "unauthenticated") {
+    return null;
+  }
+
+  // バックエンド障害中
+  if (healthStatus === "unhealthy") {
+    return <BackendError nextRetryIn={nextRetryIn} onRetry={checkHealth} />;
+  }
+
+  // 通常時のデータ取得中（2回目以降の起動でアニメーションなし）
+  if (phase !== "content" && !showAnimation) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <p
+          className="text-green-400 text-xs animate-pulse"
+          style={{ fontFamily: "'Press Start 2P', monospace" }}
+        >
+          LOADING...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>

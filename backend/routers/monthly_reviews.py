@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 import models
 from database import SessionLocal
 from domain.value_objects import YearMonth
+from services.domain.achievement_service import MonthlyAchievementService
 
 router = APIRouter(prefix="/reviews", tags=["monthly-reviews"])
 
@@ -105,46 +106,6 @@ class GoalOut(BaseModel):
     goal: str
 
 
-# ---- Helpers ----
-
-def _calc_monthly_summary(year: int, month: int, logs: list, today: datetime.date) -> dict:
-    """Compute overall_rate, total_days_checked, streak_max for a given month."""
-    last_day = calendar.monthrange(year, month)[1]
-    first_day = datetime.date(year, month, 1)
-    calc_until = min(datetime.date(year, month, last_day), today)
-
-    date_logs: dict = defaultdict(list)
-    for log in logs:
-        date_logs[log.date].append(log)
-
-    total = len(logs)
-    checked_count = sum(1 for lg in logs if lg.is_checked)
-    overall_rate = round(checked_count / total * 100) if total > 0 else 0
-
-    total_days_checked = sum(
-        1 for d in date_logs
-        if d <= calc_until and any(lg.is_checked for lg in date_logs[d])
-    )
-
-    streak_max = 0
-    current = 0
-    d = first_day
-    while d <= calc_until:
-        if any(lg.is_checked for lg in date_logs[d]):
-            current += 1
-            if current > streak_max:
-                streak_max = current
-        else:
-            current = 0
-        d += datetime.timedelta(days=1)
-
-    return {
-        "overall_rate": overall_rate,
-        "total_days_checked": total_days_checked,
-        "streak_max": streak_max,
-    }
-
-
 # ---- Routes (specific before parameterized) ----
 
 @router.get("/monthly/current/goal", response_model=GoalOut)
@@ -221,10 +182,13 @@ def list_monthly_reviews(
         logs_by_ym[ym_key].append(log)
 
     today = datetime.date.today()
+    achievement_service = MonthlyAchievementService(db)
     result = []
     for review in reviews:
         ym_obj = YearMonth.from_string(review.year_month)
-        summary = _calc_monthly_summary(ym_obj.year, ym_obj.month, logs_by_ym[review.year_month], today)
+        summary = achievement_service.build_monthly_summary(
+            ym_obj.year, ym_obj.month, logs_by_ym[review.year_month], today
+        )
         result.append({
             "id": review.id,
             "user_id": review.user_id,
