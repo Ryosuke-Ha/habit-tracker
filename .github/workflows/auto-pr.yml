@@ -17,6 +17,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Create Pull Request
         env:
@@ -41,24 +43,74 @@ jobs:
           # Issue番号を抽出
           ISSUE_NUMBER=$(echo "$BRANCH_NAME" | grep -oP '(?<=issue-)\d+' || echo "")
 
-          # PR本文を生成
-          if [ -n "$ISSUE_NUMBER" ]; then
-            BODY="closes #${ISSUE_NUMBER}
+          # mainとの差分からコミット一覧・変更ファイルを取得
+          COMMITS=$(git log origin/main..HEAD --oneline | head -20)
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD | head -30)
 
-          ## 変更内容
-          <!-- 何を変更したか簡潔に -->
-
-          ## テスト
-          - [ ] 既存テストが通る
-          - [ ] 手動動作確認済み"
-          else
-            BODY="## 変更内容
-          <!-- 何を変更したか簡潔に -->
-
-          ## テスト
-          - [ ] 既存テストが通る
-          - [ ] 手動動作確認済み"
+          # コミットが空の場合のフォールバック
+          if [ -z "$COMMITS" ]; then
+            COMMITS="（コミット情報を取得できませんでした）"
           fi
+          if [ -z "$CHANGED_FILES" ]; then
+            CHANGED_FILES="（変更ファイルを取得できませんでした）"
+          fi
+
+          # ブランチ名から変更種別チェックボックスを生成
+          if [[ "$BRANCH_NAME" == feature/* ]]; then
+            CHANGE_TYPE="- [ ] Bug fix
+          - [x] New feature
+          - [ ] Refactor
+          - [ ] Docs
+          - [ ] CI/CD"
+          elif [[ "$BRANCH_NAME" == fix/* ]]; then
+            CHANGE_TYPE="- [x] Bug fix
+          - [ ] New feature
+          - [ ] Refactor
+          - [ ] Docs
+          - [ ] CI/CD"
+          elif [[ "$BRANCH_NAME" == refactor/* ]]; then
+            CHANGE_TYPE="- [ ] Bug fix
+          - [ ] New feature
+          - [x] Refactor
+          - [ ] Docs
+          - [ ] CI/CD"
+          elif [[ "$BRANCH_NAME" == docs/* ]]; then
+            CHANGE_TYPE="- [ ] Bug fix
+          - [ ] New feature
+          - [ ] Refactor
+          - [x] Docs
+          - [ ] CI/CD"
+          else
+            CHANGE_TYPE="- [ ] Bug fix
+          - [ ] New feature
+          - [ ] Refactor
+          - [ ] Docs
+          - [ ] CI/CD"
+          fi
+
+          # PR本文を生成
+          ISSUE_LINE=""
+          if [ -n "$ISSUE_NUMBER" ]; then
+            ISSUE_LINE="## 関連Issue
+          closes #${ISSUE_NUMBER}
+
+          "
+          fi
+
+          BODY="${ISSUE_LINE}## 変更内容
+          ${COMMITS}
+
+          ## 変更ファイル
+          \`\`\`
+          ${CHANGED_FILES}
+          \`\`\`
+
+          ## 変更の種類
+          ${CHANGE_TYPE}
+
+          ## テスト
+          - [ ] 既存テストが通る（pytest・jest）
+          - [ ] 手動動作確認済み"
 
           # PRを作成
           gh pr create \
