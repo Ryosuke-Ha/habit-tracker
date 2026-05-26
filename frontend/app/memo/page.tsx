@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
+import { PageLoading } from "@/components/PageLoading";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -516,22 +517,7 @@ export default function MemoPage() {
     { label: "月の振り返り", onClick: () => router.push("/review/monthly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
   ];
 
-  if (status === "loading" || loading) {
-    return (
-      <main>
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.push("/")} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors" aria-label="戻る">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-            <h1 className="text-xl font-bold text-gray-900">TODOメモ</h1>
-          </div>
-          <HamburgerMenu user={session?.user} onSignOut={() => signOut({ callbackUrl: "/login" })} items={hamburgerItems} />
-        </div>
-        <div className="flex justify-center py-16 text-gray-400 text-sm">読み込み中…</div>
-      </main>
-    );
-  }
+  if (status === "loading" || loading) return <PageLoading />;
 
   const hasTime = !!modalTime;
 

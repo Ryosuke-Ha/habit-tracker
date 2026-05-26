@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
+import { PageLoading } from "@/components/PageLoading";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -266,26 +267,7 @@ export default function WeeklyReviewPage() {
     return review?.kpt_items.filter((i) => i.type === type) ?? [];
   }
 
-  if (status === "loading" || loading) {
-    return (
-      <main>
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/")}
-              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <h1 className="text-xl font-bold text-gray-900">週の振り返り</h1>
-          </div>
-        </div>
-        <div className="flex justify-center py-16 text-gray-400 text-sm">読み込み中…</div>
-      </main>
-    );
-  }
+  if (status === "loading" || loading) return <PageLoading />;
 
   return (
     <main>
