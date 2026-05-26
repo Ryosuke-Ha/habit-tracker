@@ -121,38 +121,34 @@ def generate_analysis(
     weakest_habit = weekly_stats.get("weakest_habit")
     strongest_habit = weekly_stats.get("strongest_habit")
 
-    # プロンプト組み立て
-    keep_text = "\n".join(f"・{c}" for c in keep_items) if keep_items else "（なし）"
-    problem_text = "\n".join(f"・{c}" for c in problem_items) if problem_items else "（なし）"
-    try_text = "\n".join(f"・{c}" for c in try_items) if try_items else "（なし）"
-    prev_try_text = (
-        "\n".join(
-            f"・{c} {'（達成）' if done else '（未達成）'}"
-            for c, done in prev_try_items
-        )
-        if prev_try_items
-        else "（なし）"
-    )
-    habit_insight = ""
-    if weakest_habit:
-        habit_insight += f"\n【最も苦手な習慣】{weakest_habit}"
-    if strongest_habit:
-        habit_insight += f"\n【最も達成できた習慣】{strongest_habit}"
+    # プロンプト組み立て（XMLタグで構造化・優先度順）
+    from services.weekly_stats import get_achievement_rate_vs_last_week
+    vs_last_week = get_achievement_rate_vs_last_week(week_start, rate, db)
 
+    nl = chr(10)
     week_start_str = week_start.strftime("%Y/%m/%d")
     week_end_str = week_end.strftime("%Y/%m/%d")
 
+    context = f"""<weekly_analysis_context>
+  <achievement>
+    <rate>{rate}%</rate>
+    <vs_last_week>{vs_last_week or "データなし"}</vs_last_week>
+    <weakest_habit>{weakest_habit or "なし"}</weakest_habit>
+    <strongest_habit>{strongest_habit or "なし"}</strongest_habit>
+  </achievement>
+  <kpt>
+    <problem>{nl.join(f"- {i}" for i in problem_items) or "なし"}</problem>
+    <try>{nl.join(f"- {i}" for i in try_items) or "なし"}</try>
+    <keep>{nl.join(f"- {i}" for i in keep_items) or "なし"}</keep>
+  </kpt>
+  <last_week_try>
+    {nl.join(f"- {c}（{'達成' if done else '未達成'}）" for c, done in prev_try_items) or "なし"}
+  </last_week_try>
+</weekly_analysis_context>"""
+
     user_message = f"""以下は今週（{week_start_str}〜{week_end_str}）の振り返りデータです。
 
-【今週の達成率】{rate}%{habit_insight}
-
-【Keep】{keep_text}
-
-【Problem】{problem_text}
-
-【Try】{try_text}
-
-【先週のTry】{prev_try_text}
+{context}
 
 以下を簡潔に教えてください（各項目2〜3行以内）:
 1. 今週の良かった点
@@ -256,15 +252,11 @@ def generate_monthly_analysis(
 
     overall_rate = stats["overall_rate"]
     current_streak = stats["current_streak"]
+    streak_max = stats["streak_max"]
+    total_days_checked = stats["total_days_checked"]
     weekly_rates = stats["weekly_rates"]
     low_achievement_count = stats["low_achievement_count"]
     low_achievement_weekday = stats["low_achievement_weekday"]
-
-    # 週ごとの達成率テキスト
-    weekly_rates_text = "\n".join(
-        f"・{w['week_start']}週: {w['rate']}%"
-        for w in weekly_rates
-    )
 
     # 低達成日の傾向テキスト
     if low_achievement_count == 0:
@@ -274,16 +266,26 @@ def generate_monthly_analysis(
     else:
         low_achievement_text = f"{low_achievement_count}日"
 
-    # プロンプト組み立て
+    # プロンプト組み立て（XMLタグで構造化・優先度順）
+    nl = chr(10)
+    context = f"""<monthly_analysis_context>
+  <achievement>
+    <overall_rate>{overall_rate}%</overall_rate>
+    <total_days_checked>{total_days_checked}日</total_days_checked>
+    <streak_max>{streak_max}日</streak_max>
+    <streak_current>{current_streak}日</streak_current>
+  </achievement>
+  <weekly_breakdown>
+    {nl.join(f"- {w['week_start']}週: {w['rate']}%" for w in weekly_rates) or "なし"}
+  </weekly_breakdown>
+  <low_achievement>
+    {low_achievement_text}
+  </low_achievement>
+</monthly_analysis_context>"""
+
     user_message = f"""以下は{year_month}の習慣達成データです。
 
-【月全体の達成率】{overall_rate}%
-【連続達成日数】{current_streak}日
-
-【週ごとの達成率】
-{weekly_rates_text}
-
-【達成率50%以下の日】{low_achievement_text}
+{context}
 
 以下を簡潔に教えてください（各項目2〜3行以内）:
 1. 今月の達成率への評価

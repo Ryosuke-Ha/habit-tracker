@@ -1,5 +1,4 @@
 import datetime
-import json
 import os
 from typing import List, Optional
 
@@ -15,6 +14,7 @@ from domain.exceptions import InvalidStateTransitionError
 from domain.value_objects import WeekPeriod
 from repositories.coaching_session_repository import CoachingSessionRepository
 from services.coaching_context import build_coaching_context, build_message_context, build_system_prompt
+from services.weekly_stats import get_weekly_stats
 
 router = APIRouter(prefix="/coaching", tags=["coaching"])
 
@@ -170,21 +170,44 @@ def create_session(
     if existing:
         raise HTTPException(status_code=409, detail="Session already exists for this week")
 
-    context_data = build_coaching_context(user_email, db)
+    # Gather scalar values needed for first_prompt selection
+    week_period = WeekPeriod.current()
+    stats = get_weekly_stats(week_period.start, db)
+    rate = stats["achievement_rate"]
+
+    prev_week_start = WeekPeriod.previous().start
+    prev_review = (
+        db.query(models.WeeklyReview)
+        .filter_by(user_id=user_email, week_start_date=prev_week_start)
+        .first()
+    )
+    prev_try = []
+    if prev_review:
+        prev_try = [
+            {"content": i.content, "is_completed": i.is_completed}
+            for i in prev_review.kpt_items if i.type == "try"
+        ][:3]
+
+    prev_completed = (
+        db.query(models.CoachingSession)
+        .filter_by(user_id=user_email, status=SessionStatus.COMPLETED)
+        .order_by(models.CoachingSession.created_at.desc())
+        .first()
+    )
+    has_prev_summary = bool(prev_completed and prev_completed.summary)
+
+    context_xml = build_coaching_context(user_email, db)
 
     session = models.CoachingSession(
         user_id=user_email,
         session_date=saturday.isoformat(),
         status=SessionStatus.IN_PROGRESS,
-        context=json.dumps(context_data, ensure_ascii=False),
+        context=context_xml,
     )
     db.add(session)
     db.flush()
 
-    system = build_system_prompt(context_data)
-    rate = context_data["achievement"]["this_week_rate"]
-    prev_try = context_data.get("prev_try_items", [])
-    has_prev_summary = bool(context_data.get("prev_session_summary"))
+    system = build_system_prompt(context_xml)
 
     if has_prev_summary:
         first_prompt = "新しいコーチングセッションを開始してください。前回のセッションを踏まえて、今週のチェックインの問いかけを1つ生成してください。"
@@ -265,8 +288,7 @@ def complete_session(
     )
     conversation = [{"role": m.role, "content": m.content} for m in all_msgs]
 
-    context_data = json.loads(session.context) if session.context else {}
-    system = build_system_prompt(context_data)
+    system = build_system_prompt(session.context or "")
 
     summary_prompt = """セッションが完了しました。以下の形式でまとめを作成してください:
 
