@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
+import { PageLoading } from "@/components/PageLoading";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -147,21 +148,7 @@ export default function CoachingPage() {
   const saturday = getThisWeekSaturday();
   const isSaturday = isTodaySaturday();
 
-  if (status === "loading" || loading) {
-    return (
-      <main>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold text-white">コーチング</h1>
-          <HamburgerMenu
-            user={session?.user}
-            onSignOut={() => signOut({ callbackUrl: "/login" })}
-            items={menuItems}
-          />
-        </div>
-        <div className="flex justify-center py-16 text-gray-500 text-sm">読み込み中…</div>
-      </main>
-    );
-  }
+  if (status === "loading" || loading) return <PageLoading />;
 
   return (
     <main>
