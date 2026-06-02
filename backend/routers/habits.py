@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from services.domain.daily_log_service import DailyLogGenerationService
+from utils.cache import invalidate_cache_prefix
 
 router = APIRouter()
 
@@ -296,6 +297,7 @@ def toggle_log(log_id: int, db: Session = Depends(get_db)):
     log.toggle()
     db.commit()
     db.refresh(log)
+    invalidate_cache_prefix("weekly_review_")
 
     if log.habit_id is not None:
         habit = db.query(models.Habit).filter(models.Habit.id == log.habit_id).first()
