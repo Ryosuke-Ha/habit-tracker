@@ -1,0 +1,22 @@
+name: Keep Alive
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # 10分ごとに実行
+  workflow_dispatch:          # 手動実行も可能
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Backend
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 10 \
+            "$BACKEND_URL/health")
+          echo "Backend health check: $response"
+          if [ "$response" != "200" ]; then
+            echo "Warning: Backend returned $response"
+          fi
