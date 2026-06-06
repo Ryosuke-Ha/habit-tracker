@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
-import { PageLoading } from "@/components/PageLoading";
+import { SkeletonReviewPage } from "@/components/Skeleton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -267,7 +267,7 @@ export default function WeeklyReviewPage() {
     return review?.kpt_items.filter((i) => i.type === type) ?? [];
   }
 
-  if (status === "loading" || loading) return <PageLoading />;
+  if (status === "loading" || loading) return <SkeletonReviewPage />;
 
   return (
     <main>
