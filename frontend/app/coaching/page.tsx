@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
 import { SkeletonCoachingPage } from "@/components/Skeleton";
+import { useStaleWhileRevalidate } from "@/hooks/useStaleWhileRevalidate";
+import { ValidatingIndicator } from "@/components/ValidatingIndicator";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -50,14 +52,41 @@ const MENU_ITEMS_FN = (router: ReturnType<typeof useRouter>) => [
   { label: "月の振り返り", onClick: () => router.push("/review/monthly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
 ];
 
+interface CoachingData {
+  currentSession: CoachingSession | null;
+  sessions: CoachingSession[];
+  goals: CoachingGoal[];
+}
+
 export default function CoachingPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const email = session?.user?.email;
 
-  const [currentSession, setCurrentSession] = useState<CoachingSession | null>(null);
-  const [sessions, setSessions] = useState<CoachingSession[]>([]);
-  const [goals, setGoals] = useState<CoachingGoal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: swrData, isLoading, isValidating, revalidate } =
+    useStaleWhileRevalidate<CoachingData>({
+      key: "coaching_sessions",
+      fetcher: async () => {
+        if (!email) throw new Error("not authenticated");
+        const [currentRes, sessionsRes, goalsRes] = await Promise.all([
+          fetch(`${API}/coaching/sessions/current`, { headers: { "X-User-Email": email } }),
+          fetch(`${API}/coaching/sessions`, { headers: { "X-User-Email": email } }),
+          fetch(`${API}/coaching/goals`, { headers: { "X-User-Email": email } }),
+        ]);
+        return {
+          currentSession: currentRes.ok ? await currentRes.json() : null,
+          sessions: sessionsRes.ok ? await sessionsRes.json() : [],
+          goals: goalsRes.ok ? await goalsRes.json() : [],
+        };
+      },
+      ttlMs: 60 * 60 * 1000,
+    });
+
+  const [currentSession, setCurrentSession] = useState<CoachingSession | null>(
+    swrData?.currentSession ?? null
+  );
+  const [sessions, setSessions] = useState<CoachingSession[]>(swrData?.sessions ?? []);
+  const [goals, setGoals] = useState<CoachingGoal[]>(swrData?.goals ?? []);
   const [startingSession, setStartingSession] = useState(false);
   const [addGoalOpen, setAddGoalOpen] = useState(false);
   const [newGoalTitle, setNewGoalTitle] = useState("");
@@ -65,30 +94,22 @@ export default function CoachingPage() {
 
   const menuItems = MENU_ITEMS_FN(router);
 
+  // SWR データが更新されたらローカル state に同期
   useEffect(() => {
-    if (status === "loading") return;
-    if (status === "unauthenticated") { router.replace("/login"); return; }
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, router]);
-
-  async function fetchData() {
-    const email = session?.user?.email;
-    if (!email) return;
-    setLoading(true);
-    try {
-      const [currentRes, sessionsRes, goalsRes] = await Promise.all([
-        fetch(`${API}/coaching/sessions/current`, { headers: { "X-User-Email": email } }),
-        fetch(`${API}/coaching/sessions`, { headers: { "X-User-Email": email } }),
-        fetch(`${API}/coaching/goals`, { headers: { "X-User-Email": email } }),
-      ]);
-      setCurrentSession(currentRes.ok ? await currentRes.json() : null);
-      if (sessionsRes.ok) setSessions(await sessionsRes.json());
-      if (goalsRes.ok) setGoals(await goalsRes.json());
-    } finally {
-      setLoading(false);
+    if (swrData) {
+      setCurrentSession(swrData.currentSession);
+      setSessions(swrData.sessions);
+      setGoals(swrData.goals);
     }
-  }
+  }, [swrData]);
+
+  // 認証完了時に revalidate を起動
+  useEffect(() => {
+    if (status === "unauthenticated") { router.replace("/login"); return; }
+    if (status !== "authenticated" || !email) return;
+    revalidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   async function handleStartSession() {
     const email = session?.user?.email;
@@ -112,7 +133,6 @@ export default function CoachingPage() {
 
   async function handleAddGoal(e: React.FormEvent) {
     e.preventDefault();
-    const email = session?.user?.email;
     if (!email || !newGoalTitle.trim() || addingGoal) return;
     setAddingGoal(true);
     try {
@@ -126,6 +146,7 @@ export default function CoachingPage() {
         setGoals((prev) => [newGoal, ...prev]);
         setNewGoalTitle("");
         setAddGoalOpen(false);
+        revalidate();
       }
     } finally {
       setAddingGoal(false);
@@ -133,7 +154,6 @@ export default function CoachingPage() {
   }
 
   async function handleCompleteGoal(goalId: number) {
-    const email = session?.user?.email;
     if (!email) return;
     const res = await fetch(`${API}/coaching/goals/${goalId}`, {
       method: "PUT",
@@ -142,16 +162,18 @@ export default function CoachingPage() {
     });
     if (res.ok) {
       setGoals((prev) => prev.filter((g) => g.id !== goalId));
+      revalidate();
     }
   }
 
   const saturday = getThisWeekSaturday();
   const isSaturday = isTodaySaturday();
 
-  if (status === "loading" || loading) return <SkeletonCoachingPage />;
+  if (status === "loading" || isLoading) return <SkeletonCoachingPage />;
 
   return (
     <main>
+      <ValidatingIndicator isValidating={isValidating} />
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>

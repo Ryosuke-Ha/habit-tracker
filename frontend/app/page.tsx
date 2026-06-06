@@ -10,6 +10,8 @@ import HamburgerMenu from "@/components/HamburgerMenu";
 import { useSetting } from "@/hooks/useSetting"
 import { BackendError } from "@/components/BackendError";
 import { SkeletonTodoPage } from "@/components/Skeleton";
+import { ValidatingIndicator } from "@/components/ValidatingIndicator";
+import { getFromCache, setToCache, invalidateSWRCachePrefix } from "@/hooks/useStaleWhileRevalidate";
 
 interface Template { id: number; name: string; }
 
@@ -84,6 +86,11 @@ export default function Home() {
   const { getSetting, setSetting, ready: settingReady } = useSetting();
   const [phase, setPhase] = useState<Phase>("initial");
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+
+  const d = new Date();
+  const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const todayCacheKey = `today_logs_${todayStr}`;
   const [animationDone, setAnimationDone] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [showAnimation, setShowAnimation] = useState(false);
@@ -141,6 +148,21 @@ export default function Home() {
     const email = session?.user?.email;
     const authHeaders: Record<string, string> = email ? { "X-User-Email": email } : {};
 
+    // キャッシュがあれば即座に表示
+    const cachedLogs = getFromCache<LogApiResponse[]>(todayCacheKey);
+    if (cachedLogs) {
+      setDailyLogs(cachedLogs.map((l) => ({
+        logId: l.id,
+        habitId: l.habit_id,
+        title: l.title,
+        scheduledTime: l.scheduled_time,
+        location: l.location,
+        isChecked: l.is_checked,
+      })));
+      setDataReady(true);
+      setIsValidating(true);
+    }
+
     try {
       const templatesRes = await fetch(`${API}/templates`);
       if (!templatesRes.ok) throw new Error();
@@ -174,6 +196,7 @@ export default function Home() {
       ]);
 
       const logsData: LogApiResponse[] = await logsRes.json();
+      setToCache(todayCacheKey, logsData, 24 * 60 * 60 * 1000);
       setDailyLogs(logsData.map((l) => ({
         logId: l.id,
         habitId: l.habit_id,
@@ -212,9 +235,12 @@ export default function Home() {
       }
       setFetchError(null);
     } catch {
-      setFetchError("サーバーに接続できません。しばらくお待ちください。");
+      if (!cachedLogs) {
+        setFetchError("サーバーに接続できません。しばらくお待ちください。");
+      }
     } finally {
       setDataReady(true);
+      setIsValidating(false);
     }
   }
 
@@ -300,6 +326,7 @@ export default function Home() {
     setDailyLogs((prev) => prev.map((l) => l.logId === logId ? { ...l, isChecked: !l.isChecked } : l));
     try {
       await fetch(`${API}/logs/${logId}/toggle`, { method: "POST" });
+      invalidateSWRCachePrefix("today_logs_");
     } catch {
       setDailyLogs((prev) => prev.map((l) => l.logId === logId ? prevLog : l));
     }
@@ -310,6 +337,7 @@ export default function Home() {
     setDailyLogs((prev) => prev.filter((l) => l.logId !== logId));
     try {
       await fetch(`${API}/logs/${logId}`, { method: "DELETE" });
+      invalidateSWRCachePrefix("today_logs_");
     } catch {
       setDailyLogs(prevLogs);
     }
@@ -550,6 +578,7 @@ export default function Home() {
 
   return (
     <>
+      <ValidatingIndicator isValidating={isValidating} />
       {phase === "loading" && showAnimation && (
         <LoadingOverlay onComplete={() => {
           setSetting("habit_app_launched", "true");
