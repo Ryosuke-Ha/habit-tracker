@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
-import { PageLoading } from "@/components/PageLoading";
+import { SkeletonCoachingPage } from "@/components/Skeleton";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -148,7 +148,7 @@ export default function CoachingPage() {
   const saturday = getThisWeekSaturday();
   const isSaturday = isTodaySaturday();
 
-  if (status === "loading" || loading) return <PageLoading />;
+  if (status === "loading" || loading) return <SkeletonCoachingPage />;
 
   return (
     <main>
