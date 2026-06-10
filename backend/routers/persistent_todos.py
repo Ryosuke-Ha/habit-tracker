@@ -6,11 +6,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import models
+from auth import verify_api_key
 from database import SessionLocal
 
 _JST = datetime.timezone(datetime.timedelta(hours=9))
 
-router = APIRouter(prefix="/persistent-todos", tags=["persistent-todos"])
+router = APIRouter(prefix="/persistent-todos", tags=["persistent-todos"], dependencies=[Depends(verify_api_key)])
 
 
 def get_db():

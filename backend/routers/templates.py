@@ -4,9 +4,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import models
+from auth import verify_api_key
 from database import get_db
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 class TemplateResponse(BaseModel):

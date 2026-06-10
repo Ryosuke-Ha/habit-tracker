@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 import models
+from auth import verify_api_key
 from database import SessionLocal
 
-router = APIRouter(prefix="/notifications", tags=["notifications"])
+router = APIRouter(prefix="/notifications", tags=["notifications"], dependencies=[Depends(verify_api_key)])
 
 JST = timezone(timedelta(hours=9))
 

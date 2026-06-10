@@ -6,12 +6,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import models
+from auth import verify_api_key
 from database import SessionLocal
 from domain.enums import TodoDisplayCategory
 
 _JST = datetime.timezone(datetime.timedelta(hours=9))
 
-router = APIRouter(prefix="/scheduled-todos", tags=["scheduled-todos"])
+router = APIRouter(prefix="/scheduled-todos", tags=["scheduled-todos"], dependencies=[Depends(verify_api_key)])
 
 
 def get_db():

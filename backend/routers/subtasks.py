@@ -6,9 +6,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import models
+from auth import verify_api_key
 from database import SessionLocal
 
-router = APIRouter(prefix="/subtasks", tags=["subtasks"])
+router = APIRouter(prefix="/subtasks", tags=["subtasks"], dependencies=[Depends(verify_api_key)])
 
 
 def get_db():

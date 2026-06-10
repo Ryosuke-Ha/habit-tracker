@@ -8,11 +8,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import models
+from auth import verify_api_key
 from database import SessionLocal
 from domain.value_objects import YearMonth
 from services.domain.achievement_service import MonthlyAchievementService
 
-router = APIRouter(prefix="/reviews", tags=["monthly-reviews"])
+router = APIRouter(prefix="/reviews", tags=["monthly-reviews"], dependencies=[Depends(verify_api_key)])
 
 
 def get_db():
