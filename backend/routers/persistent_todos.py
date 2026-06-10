@@ -174,3 +174,41 @@ def delete_persistent_todo(
         raise HTTPException(status_code=404, detail="Not found")
     db.delete(todo)
     db.commit()
+
+
+@router.post("/from-daily-log/{log_id}", response_model=PersistentTodoOut)
+def convert_from_daily_log(
+    log_id: int,
+    body: PersistentTodoCreate,
+    db: Session = Depends(get_db),
+    user_email: str = Depends(require_user),
+):
+    """Convert a DailyLog to a PersistentTodo, migrating its SubTasks."""
+    daily_log = db.query(models.DailyLog).filter(
+        models.DailyLog.id == log_id,
+        models.DailyLog.is_deleted == False,  # noqa: E712
+    ).first()
+    if not daily_log:
+        raise HTTPException(status_code=404, detail="Log not found")
+
+    todo = models.PersistentTodo(
+        user_id=user_email,
+        title=body.title,
+        scheduled_time=body.scheduled_time,
+        location=body.location or "",
+    )
+    db.add(todo)
+    db.flush()
+
+    subtasks = db.query(models.SubTask).filter(
+        models.SubTask.todo_type == "habit_log",
+        models.SubTask.todo_id == log_id,
+    ).all()
+    for subtask in subtasks:
+        subtask.todo_type = "persistent_todo"
+        subtask.todo_id = todo.id
+
+    daily_log.is_deleted = True
+    db.commit()
+    db.refresh(todo)
+    return todo
