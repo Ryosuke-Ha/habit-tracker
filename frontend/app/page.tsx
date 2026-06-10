@@ -455,8 +455,7 @@ export default function Home() {
     setDailyLogs((prev) => prev.filter((l) => l.logId !== logId));
     setPersistentTodos((prev) => [...prev, tempPersistent]);
     try {
-      await fetch(`${API}/logs/${logId}`, { method: "DELETE" });
-      const res = await fetch(`${API}/persistent-todos`, {
+      const res = await fetch(`${API}/persistent-todos/from-daily-log/${logId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-User-Email": email },
         body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time || null, location: data.location }),
@@ -480,8 +479,7 @@ export default function Home() {
     setPersistentTodos((prev) => prev.filter((t) => t.id !== id));
     setDailyLogs((prev) => [...prev, tempLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
     try {
-      await fetch(`${API}/persistent-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
-      const res = await fetch(`${API}/logs/standalone`, {
+      const res = await fetch(`${API}/logs/from-persistent-todo/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time, location: data.location, template_id: templateId }),
