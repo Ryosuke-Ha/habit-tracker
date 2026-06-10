@@ -7,11 +7,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import models
+from auth import verify_api_key
 from database import get_db
 from services.domain.daily_log_service import DailyLogGenerationService
 from utils.cache import invalidate_cache_prefix
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 JST = timezone(timedelta(hours=9))
 

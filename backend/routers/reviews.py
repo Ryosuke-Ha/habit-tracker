@@ -2,6 +2,8 @@ import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+
+from auth import verify_api_key
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -18,7 +20,7 @@ from services.weekly_stats import (
 )
 from utils.cache import get_cached, invalidate_cache_prefix, set_cached
 
-router = APIRouter(prefix="/reviews", tags=["reviews"])
+router = APIRouter(prefix="/reviews", tags=["reviews"], dependencies=[Depends(verify_api_key)])
 
 
 def get_db():

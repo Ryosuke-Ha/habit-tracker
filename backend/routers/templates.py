@@ -4,10 +4,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import models
+from auth import verify_api_key
 from database import get_db
 from utils.cache import get_cached, invalidate_cache, set_cached
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 class TemplateResponse(BaseModel):

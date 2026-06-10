@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import models
+from auth import verify_api_key
 from database import SessionLocal
 from domain.enums import GoalStatus, SessionStatus
 from domain.exceptions import InvalidStateTransitionError
@@ -16,7 +17,7 @@ from repositories.coaching_session_repository import CoachingSessionRepository
 from services.coaching_context import build_coaching_context, build_message_context, build_system_prompt
 from services.weekly_stats import get_weekly_stats
 
-router = APIRouter(prefix="/coaching", tags=["coaching"])
+router = APIRouter(prefix="/coaching", tags=["coaching"], dependencies=[Depends(verify_api_key)])
 
 
 def get_db():
