@@ -9,8 +9,7 @@ import { useStaleWhileRevalidate, invalidateSWRCache } from "@/hooks/useStaleWhi
 import { ValidatingIndicator } from "@/components/ValidatingIndicator";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { apiFetch } from "@/lib/api";
 
 interface KPTItem {
   id: number;
@@ -87,15 +86,15 @@ export default function WeeklyReviewPage() {
         if (!email) throw new Error("not authenticated");
         const headers = { "X-User-Email": email };
         const [reviewRes, prevRes, analysisRes] = await Promise.all([
-          fetch(`${API}/reviews/weekly/${currentWeekStart}`, { headers }),
-          fetch(`${API}/reviews/weekly/${getPrevSundayStr(currentWeekStart)}`, { headers })
+          apiFetch(`/reviews/weekly/${currentWeekStart}`, { headers }),
+          apiFetch(`/reviews/weekly/${getPrevSundayStr(currentWeekStart)}`, { headers })
             .then(async (r) => {
               if (!r.ok) throw new Error();
               const data: WeeklyReview = await r.json();
               return data.kpt_items.filter((i) => i.type === "try");
             })
             .catch(() => [] as KPTItem[]),
-          fetch(`${API}/reviews/weekly/${currentWeekStart}/analysis`, { headers }),
+          apiFetch(`/reviews/weekly/${currentWeekStart}/analysis`, { headers }),
         ]);
         const reviewData: WeeklyReview = await reviewRes.json();
         if (analysisRes.ok) {
@@ -172,8 +171,8 @@ export default function WeeklyReviewPage() {
     if (isGenerating) return;
     setIsGenerating(true);
     try {
-      const res = await fetch(
-        `${API}/reviews/weekly/${currentWeekStart}/analysis/generate`,
+      const res = await apiFetch(
+        `/reviews/weekly/${currentWeekStart}/analysis/generate`,
         { method: "POST", headers: { "X-User-Email": email } }
       );
       if (res.ok) {
@@ -198,9 +197,9 @@ export default function WeeklyReviewPage() {
     setNewContent("");
     setAddingType(null);
     try {
-      const res = await fetch(`${API}/reviews/weekly/${reviewId}/kpt`, {
+      const res = await apiFetch(`/reviews/weekly/${reviewId}/kpt`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-User-Email": userEmail },
+        headers: { "X-User-Email": userEmail },
         body: JSON.stringify({ type, content }),
       });
       const item: KPTItem = await res.json();
@@ -217,9 +216,9 @@ export default function WeeklyReviewPage() {
       prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === item.id ? { ...i, is_completed: !i.is_completed } : i)) } : prev
     );
     try {
-      await fetch(`${API}/reviews/weekly/${item.review_id}/kpt/${item.id}`, {
+      await apiFetch(`/reviews/weekly/${item.review_id}/kpt/${item.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "X-User-Email": userEmail },
+        headers: { "X-User-Email": userEmail },
         body: JSON.stringify({ is_completed: !item.is_completed }),
       });
       invalidateSWRCache(weekCacheKey);
@@ -243,9 +242,9 @@ export default function WeeklyReviewPage() {
     setEditingId(null);
     setSavingId(itemId);
     try {
-      const res = await fetch(`${API}/reviews/weekly/${reviewId}/kpt/${itemId}`, {
+      const res = await apiFetch(`/reviews/weekly/${reviewId}/kpt/${itemId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "X-User-Email": userEmail },
+        headers: { "X-User-Email": userEmail },
         body: JSON.stringify({ content }),
       });
       const updated: KPTItem = await res.json();
@@ -271,7 +270,7 @@ export default function WeeklyReviewPage() {
       prev ? { ...prev, kpt_items: prev.kpt_items.filter((i) => i.id !== itemId) } : prev
     );
     try {
-      await fetch(`${API}/reviews/weekly/${reviewId}/kpt/${itemId}`, {
+      await apiFetch(`/reviews/weekly/${reviewId}/kpt/${itemId}`, {
         method: "DELETE",
         headers: { "X-User-Email": userEmail },
       });

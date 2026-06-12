@@ -5,11 +5,10 @@ import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useSetting } from "@/hooks/useSetting";
 import HamburgerMenu from "@/components/HamburgerMenu";
+import { apiFetch } from "@/lib/api";
 
 interface Template { id: number; name: string; }
 interface Habit { id: number; template_id: number; title: string; scheduled_time: string; location: string; order: number; }
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const PROTECTED = new Set(["平日", "休日"]);
 const DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -101,7 +100,7 @@ export default function TemplatesPage() {
   async function fetchTemplates() {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/templates`);
+      const res = await apiFetch(`/templates`);
       setTemplates(await res.json());
       setError("");
     } catch {
@@ -115,7 +114,7 @@ export default function TemplatesPage() {
     if (habitsByTemplate[templateId] !== undefined) return;
     setLoadingHabitsFor(templateId);
     try {
-      const res = await fetch(`${API}/templates/${templateId}/habits`);
+      const res = await apiFetch(`/templates/${templateId}/habits`);
       const data = await res.json();
       setHabitsByTemplate((prev) => ({ ...prev, [templateId]: data }));
     } finally {
@@ -137,9 +136,8 @@ export default function TemplatesPage() {
     if (!editingName.trim() || submittingRenameTemplate) return;
     setSubmittingRenameTemplate(true);
     try {
-      await fetch(`${API}/templates/${id}`, {
+      await apiFetch(`/templates/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: editingName.trim() }),
       });
       setEditingId(null);
@@ -153,7 +151,7 @@ export default function TemplatesPage() {
     if (submittingDeleteTemplate) return;
     setSubmittingDeleteTemplate(true);
     try {
-      await fetch(`${API}/templates/${id}`, { method: "DELETE" });
+      await apiFetch(`/templates/${id}`, { method: "DELETE" });
       setConfirmDeleteId(null);
       fetchTemplates();
     } finally {
@@ -165,9 +163,8 @@ export default function TemplatesPage() {
     if (!newName.trim() || submittingAddTemplate) return;
     setSubmittingAddTemplate(true);
     try {
-      await fetch(`${API}/templates`, {
+      await apiFetch(`/templates`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName.trim() }),
       });
       setNewName("");
@@ -183,9 +180,8 @@ export default function TemplatesPage() {
     if (!newHabit.title.trim() || submittingAddHabit) return;
     setSubmittingAddHabit(true);
     try {
-      const res = await fetch(`${API}/habits`, {
+      const res = await apiFetch(`/habits`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newHabit.title.trim(),
           scheduled_time: newHabit.scheduled_time,
@@ -209,9 +205,8 @@ export default function TemplatesPage() {
     if (submittingEditHabit) return;
     setSubmittingEditHabit(true);
     try {
-      const res = await fetch(`${API}/habits/${habitId}`, {
+      const res = await apiFetch(`/habits/${habitId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: editHabit.title.trim(), scheduled_time: editHabit.scheduled_time, location: editHabit.location.trim() }),
       });
       const updated: Habit = await res.json();
@@ -236,7 +231,7 @@ export default function TemplatesPage() {
       [templateId]: (prev[templateId] || []).filter((h) => h.id !== habitId),
     }));
     try {
-      await fetch(`${API}/habits/${habitId}`, { method: "DELETE" });
+      await apiFetch(`/habits/${habitId}`, { method: "DELETE" });
     } catch {
       // ロールバック
       fetchHabits(templateId);

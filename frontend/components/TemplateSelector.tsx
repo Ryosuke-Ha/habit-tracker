@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 interface Template {
   id: number;
   name: string;
 }
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function TemplateSelector() {
   const router = useRouter();
@@ -17,7 +16,7 @@ export default function TemplateSelector() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`${API}/templates`)
+    apiFetch(`/templates`)
       .then((r) => r.json())
       .then(setTemplates)
       .catch(() => setError("バックエンドに接続できません。サーバーを起動してください。"))

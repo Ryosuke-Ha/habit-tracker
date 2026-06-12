@@ -4,11 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
+import { apiFetch } from "@/lib/api";
 import { SkeletonMemoPage } from "@/components/Skeleton";
 import { useStaleWhileRevalidate, invalidateSWRCache } from "@/hooks/useStaleWhileRevalidate";
 import { ValidatingIndicator } from "@/components/ValidatingIndicator";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface ScheduledTodo {
   id: number;
@@ -110,7 +109,7 @@ export default function MemoPage() {
       key: "scheduled_todos",
       fetcher: async () => {
         if (!email) throw new Error("not authenticated");
-        const res = await fetch(`${API}/scheduled-todos`, {
+        const res = await apiFetch(`/scheduled-todos`, {
           headers: { "X-User-Email": email },
         });
         if (!res.ok) throw new Error("fetch failed");
@@ -213,9 +212,9 @@ export default function MemoPage() {
     setIsSubmitting(true);
     try {
       if (editingId !== null) {
-        const res = await fetch(`${API}/scheduled-todos/${editingId}`, {
+        const res = await apiFetch(`/scheduled-todos/${editingId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json", "X-User-Email": email },
+          headers: { "X-User-Email": email },
           body: JSON.stringify(body),
         });
         if (res.ok) {
@@ -226,9 +225,9 @@ export default function MemoPage() {
           revalidate();
         }
       } else {
-        const res = await fetch(`${API}/scheduled-todos`, {
+        const res = await apiFetch(`/scheduled-todos`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-User-Email": email },
+          headers: { "X-User-Email": email },
           body: JSON.stringify(body),
         });
         if (res.ok) {
@@ -249,7 +248,7 @@ export default function MemoPage() {
     const prev = todos;
     setTodos((t) => t.filter((item) => item.id !== id));
     try {
-      const res = await fetch(`${API}/scheduled-todos/${id}`, {
+      const res = await apiFetch(`/scheduled-todos/${id}`, {
         method: "DELETE",
         headers: { "X-User-Email": email },
       });
@@ -272,7 +271,7 @@ export default function MemoPage() {
       const email = session?.user?.email;
       if (!email) return;
       try {
-        const res = await fetch(`${API}/subtasks?todo_type=scheduled_todo&todo_id=${id}`, {
+        const res = await apiFetch(`/subtasks?todo_type=scheduled_todo&todo_id=${id}`, {
           headers: { "X-User-Email": email },
         });
         if (res.ok) {
@@ -296,9 +295,9 @@ export default function MemoPage() {
     const optimistic: SubTask = { id: tempId, title, is_completed: false, order: (subtasksMap[todoId] ?? []).length };
     setSubtasksMap((prev) => ({ ...prev, [todoId]: [...(prev[todoId] ?? []), optimistic] }));
     try {
-      const res = await fetch(`${API}/subtasks`, {
+      const res = await apiFetch(`/subtasks`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        headers: { "X-User-Email": email },
         body: JSON.stringify({ todo_type: "scheduled_todo", todo_id: todoId, title }),
       });
       if (res.ok) {
@@ -322,7 +321,7 @@ export default function MemoPage() {
     const updated = prev.map((s) => (s.id === subtaskId ? { ...s, is_completed: !s.is_completed } : s));
     setSubtasksMap((m) => ({ ...m, [todoId]: updated }));
     try {
-      const res = await fetch(`${API}/subtasks/${subtaskId}/toggle`, {
+      const res = await apiFetch(`/subtasks/${subtaskId}/toggle`, {
         method: "POST",
         headers: { "X-User-Email": email },
       });
@@ -343,7 +342,7 @@ export default function MemoPage() {
     const prev = subtasksMap[todoId] ?? [];
     setSubtasksMap((m) => ({ ...m, [todoId]: prev.filter((s) => s.id !== subtaskId) }));
     try {
-      const res = await fetch(`${API}/subtasks/${subtaskId}`, {
+      const res = await apiFetch(`/subtasks/${subtaskId}`, {
         method: "DELETE",
         headers: { "X-User-Email": email },
       });

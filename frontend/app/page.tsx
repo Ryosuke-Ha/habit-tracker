@@ -9,6 +9,7 @@ import TodoItem, { TodoEntry } from "@/components/TodoItem";
 import HamburgerMenu from "@/components/HamburgerMenu";
 import { useSetting } from "@/hooks/useSetting"
 import { BackendError } from "@/components/BackendError";
+import { apiFetch } from "@/lib/api";
 import { SkeletonTodoPage } from "@/components/Skeleton";
 import { ValidatingIndicator } from "@/components/ValidatingIndicator";
 import { getFromCache, setToCache, invalidateSWRCachePrefix } from "@/hooks/useStaleWhileRevalidate";
@@ -53,7 +54,6 @@ interface ScheduledTodo {
   display_category: "overdue" | "today" | "future" | "past";
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const WEEKDAY_LABELS = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
 
 function generateTimeOptions(): string[] {
@@ -164,7 +164,7 @@ export default function Home() {
     }
 
     try {
-      const templatesRes = await fetch(`${API}/templates`);
+      const templatesRes = await apiFetch(`/templates`);
       if (!templatesRes.ok) throw new Error();
       const templates: Template[] = await templatesRes.json();
 
@@ -188,11 +188,11 @@ export default function Home() {
       setTemplateName(matched.name);
 
       const [logsRes, tryRes, goalRes, persistentRes, scheduledRes] = await Promise.all([
-        fetch(`${API}/logs/today?template_id=${matched.id}`),
-        email ? fetch(`${API}/reviews/weekly/current/try-items`, { headers: authHeaders }) : Promise.resolve(null),
-        email ? fetch(`${API}/reviews/monthly/current/goal`, { headers: authHeaders }) : Promise.resolve(null),
-        email ? fetch(`${API}/persistent-todos`, { headers: authHeaders }) : Promise.resolve(null),
-        email ? fetch(`${API}/scheduled-todos/today`, { headers: authHeaders }) : Promise.resolve(null),
+        apiFetch(`/logs/today?template_id=${matched.id}`),
+        email ? apiFetch(`/reviews/weekly/current/try-items`, { headers: authHeaders }) : Promise.resolve(null),
+        email ? apiFetch(`/reviews/monthly/current/goal`, { headers: authHeaders }) : Promise.resolve(null),
+        email ? apiFetch(`/persistent-todos`, { headers: authHeaders }) : Promise.resolve(null),
+        email ? apiFetch(`/scheduled-todos/today`, { headers: authHeaders }) : Promise.resolve(null),
       ]);
 
       const logsData: LogApiResponse[] = await logsRes.json();
@@ -266,9 +266,9 @@ export default function Home() {
       setPersistentTodos((prev) => [...prev, tempTodo]);
       closeModal();
       try {
-        const res = await fetch(`${API}/persistent-todos`, {
+        const res = await apiFetch(`/persistent-todos`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-User-Email": email },
+          headers: { "X-User-Email": email },
           body: JSON.stringify({ title, scheduled_time: time || null, location }),
         });
         const newTodo: PersistentTodo = await res.json();
@@ -285,9 +285,8 @@ export default function Home() {
       setDailyLogs((prev) => [...prev, tempLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
       closeModal();
       try {
-        const res = await fetch(`${API}/logs/standalone`, {
+        const res = await apiFetch(`/logs/standalone`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title, scheduled_time: time, location, template_id: templateId }),
         });
         const newLog: LogApiResponse = await res.json();
@@ -310,9 +309,9 @@ export default function Home() {
     if (!prevItem) return;
     setTryItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, is_completed: !i.is_completed } : i)));
     try {
-      await fetch(`${API}/reviews/weekly/${prevItem.review_id}/kpt/${itemId}`, {
+      await apiFetch(`/reviews/weekly/${prevItem.review_id}/kpt/${itemId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        headers: { "X-User-Email": email },
         body: JSON.stringify({ is_completed: !prevItem.is_completed }),
       });
     } catch {
@@ -325,7 +324,7 @@ export default function Home() {
     if (!prevLog) return;
     setDailyLogs((prev) => prev.map((l) => l.logId === logId ? { ...l, isChecked: !l.isChecked } : l));
     try {
-      await fetch(`${API}/logs/${logId}/toggle`, { method: "POST" });
+      await apiFetch(`/logs/${logId}/toggle`, { method: "POST" });
       invalidateSWRCachePrefix("today_logs_");
     } catch {
       setDailyLogs((prev) => prev.map((l) => l.logId === logId ? prevLog : l));
@@ -336,7 +335,7 @@ export default function Home() {
     const prevLogs = dailyLogs;
     setDailyLogs((prev) => prev.filter((l) => l.logId !== logId));
     try {
-      await fetch(`${API}/logs/${logId}`, { method: "DELETE" });
+      await apiFetch(`/logs/${logId}`, { method: "DELETE" });
       invalidateSWRCachePrefix("today_logs_");
     } catch {
       setDailyLogs(prevLogs);
@@ -349,10 +348,8 @@ export default function Home() {
       prev.map((l) => l.logId === logId ? { ...l, title: data.title, scheduledTime: data.scheduled_time, location: data.location } : l)
         .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
     );
-    const url = `${API}/logs/${logId}`;
-    fetch(url, {
+    apiFetch(`/logs/${logId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     })
       .then((r) => r.json())
@@ -374,7 +371,7 @@ export default function Home() {
     const prevTodo = persistentTodos.find((t) => t.id === id);
     setPersistentTodos((prev) => prev.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t)));
     try {
-      await fetch(`${API}/persistent-todos/${id}/complete`, {
+      await apiFetch(`/persistent-todos/${id}/complete`, {
         method: "POST",
         headers: { "X-User-Email": email },
       });
@@ -389,7 +386,7 @@ export default function Home() {
     const prevTodos = persistentTodos;
     setPersistentTodos((prev) => prev.filter((t) => t.id !== id));
     try {
-      await fetch(`${API}/persistent-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+      await apiFetch(`/persistent-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
     } catch {
       setPersistentTodos(prevTodos);
     }
@@ -402,7 +399,7 @@ export default function Home() {
     if (!prev) return;
     setScheduledTodos((list) => list.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t)));
     try {
-      await fetch(`${API}/scheduled-todos/${id}/toggle`, {
+      await apiFetch(`/scheduled-todos/${id}/toggle`, {
         method: "POST",
         headers: { "X-User-Email": email },
       });
@@ -417,7 +414,7 @@ export default function Home() {
     const prevTodos = scheduledTodos;
     setScheduledTodos((prev) => prev.filter((t) => t.id !== id));
     try {
-      await fetch(`${API}/scheduled-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+      await apiFetch(`/scheduled-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
     } catch {
       setScheduledTodos(prevTodos);
     }
@@ -430,9 +427,9 @@ export default function Home() {
     setScheduledTodos((prev) =>
       prev.map((t) => (t.id === id ? { ...t, title: data.title, scheduled_time: data.scheduled_time || null, location: data.location || null } : t))
     );
-    fetch(`${API}/scheduled-todos/${id}`, {
+    apiFetch(`/scheduled-todos/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "X-User-Email": email },
+      headers: { "X-User-Email": email },
       body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time || null, location: data.location }),
     })
       .then((r) => r.json())
@@ -455,9 +452,9 @@ export default function Home() {
     setDailyLogs((prev) => prev.filter((l) => l.logId !== logId));
     setPersistentTodos((prev) => [...prev, tempPersistent]);
     try {
-      const res = await fetch(`${API}/persistent-todos/from-daily-log/${logId}`, {
+      const res = await apiFetch(`/persistent-todos/from-daily-log/${logId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        headers: { "X-User-Email": email },
         body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time || null, location: data.location }),
       });
       if (res.ok) {
@@ -479,9 +476,8 @@ export default function Home() {
     setPersistentTodos((prev) => prev.filter((t) => t.id !== id));
     setDailyLogs((prev) => [...prev, tempLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
     try {
-      const res = await fetch(`${API}/logs/from-persistent-todo/${id}`, {
+      const res = await apiFetch(`/logs/from-persistent-todo/${id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time, location: data.location, template_id: templateId }),
       });
       if (res.ok) {
@@ -504,9 +500,9 @@ export default function Home() {
     setPersistentTodos((prev) =>
       prev.map((t) => (t.id === id ? { ...t, title: data.title, scheduled_time: data.scheduled_time || null, location: data.location || null } : t))
     );
-    fetch(`${API}/persistent-todos/${id}`, {
+    apiFetch(`/persistent-todos/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "X-User-Email": email },
+      headers: { "X-User-Email": email },
       body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time || null, location: data.location }),
     })
       .then((r) => r.json())

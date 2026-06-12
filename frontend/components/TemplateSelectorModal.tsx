@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSetting } from "@/hooks/useSetting";
+import { apiFetch } from "@/lib/api";
 
 interface Template {
   id: number;
   name: string;
 }
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface Props {
   isOpen: boolean;
@@ -37,7 +36,7 @@ export default function TemplateSelectorModal({
 
   async function fetchTemplates() {
     try {
-      const res = await fetch(`${API}/templates`);
+      const res = await apiFetch(`/templates`);
       setTemplates(await res.json());
       setError("");
     } catch {

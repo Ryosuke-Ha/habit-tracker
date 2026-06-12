@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { apiFetch } from "@/lib/api";
 
 function generateTimeOptions(): string[] {
   const times: string[] = [];
@@ -129,7 +128,7 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
 
   // Fetch subtasks on mount to show indicator even when collapsed
   useEffect(() => {
-    fetch(`${API}/subtasks?todo_type=${subtaskType}&todo_id=${subtaskTodoId}`)
+    apiFetch(`/subtasks?todo_type=${subtaskType}&todo_id=${subtaskTodoId}`)
       .then((r) => r.json())
       .then((data: SubTask[]) => { setSubtasks(data); setSubtasksLoaded(true); })
       .catch(() => setSubtasksLoaded(true));
@@ -145,9 +144,8 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
     setNewSubtaskTitle("");
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API}/subtasks`, {
+      const res = await apiFetch(`/subtasks`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ todo_type: subtaskType, todo_id: subtaskTodoId, title }),
       });
       const created: SubTask = await res.json();
@@ -164,14 +162,14 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
     if (!prev) return;
     setSubtasks((list) => list.map((s) => (s.id === id ? { ...s, is_completed: !s.is_completed } : s)));
     try {
-      await fetch(`${API}/subtasks/${id}/toggle`, { method: "POST" });
+      await apiFetch(`/subtasks/${id}/toggle`, { method: "POST" });
     } catch {
       setSubtasks((list) => list.map((s) => (s.id === id ? prev : s)));
     }
   }
 
   async function handleDeleteSubtask(id: number) {
-    await fetch(`${API}/subtasks/${id}`, { method: "DELETE" });
+    await apiFetch(`/subtasks/${id}`, { method: "DELETE" });
     setSubtasks((prev) => prev.filter((s) => s.id !== id));
   }
 
