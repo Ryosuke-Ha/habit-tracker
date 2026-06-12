@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 import models
 from auth import verify_api_key
 from database import get_db
+from utils.cache import get_cached, invalidate_cache, set_cached
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -51,13 +52,18 @@ class TemplateUpdate(BaseModel):
 
 @router.get("/templates", response_model=list[TemplateWithStatsOut])
 def get_templates(db: Session = Depends(get_db)):
+    cache_key = "templates"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+
     templates = db.query(models.Template).all()
     habit_counts = dict(
         db.query(models.Habit.template_id, func.count(models.Habit.id))
         .group_by(models.Habit.template_id)
         .all()
     )
-    return [
+    result = [
         {
             "id": t.id,
             "name": t.name,
@@ -66,6 +72,8 @@ def get_templates(db: Session = Depends(get_db)):
         }
         for t in templates
     ]
+    set_cached(cache_key, result, ttl_seconds=600)
+    return result
 
 
 @router.post("/templates", response_model=TemplateResponse)
@@ -79,6 +87,7 @@ def create_template(body: TemplateCreate, db: Session = Depends(get_db)):
     db.add(template)
     db.commit()
     db.refresh(template)
+    invalidate_cache("templates")
     return template
 
 
@@ -92,6 +101,7 @@ def update_template(template_id: int, body: TemplateUpdate, db: Session = Depend
     template.name = body.name.strip()
     db.commit()
     db.refresh(template)
+    invalidate_cache("templates")
     return template
 
 
@@ -104,6 +114,7 @@ def delete_template(template_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail=f"Template '{template.name}' cannot be deleted")
     db.delete(template)
     db.commit()
+    invalidate_cache("templates")
     return {"ok": True}
 
 

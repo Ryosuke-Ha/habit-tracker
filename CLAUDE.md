@@ -65,10 +65,27 @@ GET /logs/today → returns all DailyLog records as-is
 GET /logs/today → calculates achievement rate, sorts by time, filters completed items
 ```
 
-### AI Context Principle
-When passing data to Claude API, always pre-process it.
-Pass aggregated/summarized data, NOT raw database records.
-This reduces token consumption and improves response quality.
+### AI Context Engineering Rules
+
+ClaudeはXMLタグで構造化されたコンテキストを最も正確に解釈する。
+AIへデータを渡す際は以下の原則に従うこと。
+
+**原則**:
+1. **XMLタグで構造化する**: dict・f文字列ではなくXMLタグを使用
+2. **重要な情報を上に置く**: achievement → kpt → goals → previous_session の順
+3. **件数制限を守る**: KPT最大3件・ゴール最大3件
+4. **テキスト制限を守る**: サマリー最大300文字
+5. **集計済みデータのみ渡す**: 生データ禁止・APIレイヤーで計算してから渡す
+
+**XML構造のテンプレート**:
+```xml
+<context_type>
+  <achievement>      <!-- 最重要（達成率・比較） -->
+  <kpt or analysis>  <!-- 次に重要（課題・振り返り） -->
+  <goals>            <!-- 補足情報 -->
+  <previous>         <!-- 参考情報 -->
+</context_type>
+```
 
 ### Authentication
 - Web: NextAuth.js (Google OAuth)

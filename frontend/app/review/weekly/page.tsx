@@ -4,7 +4,9 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
-import { PageLoading } from "@/components/PageLoading";
+import { SkeletonReviewPage } from "@/components/Skeleton";
+import { useStaleWhileRevalidate, invalidateSWRCache } from "@/hooks/useStaleWhileRevalidate";
+import { ValidatingIndicator } from "@/components/ValidatingIndicator";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { apiFetch } from "@/lib/api";
@@ -65,13 +67,48 @@ const KPT_CONFIG = {
 
 type KPTType = keyof typeof KPT_CONFIG;
 
+interface WeeklyReviewData {
+  review: WeeklyReview;
+  prevTryItems: KPTItem[];
+}
+
 export default function WeeklyReviewPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const email = session?.user?.email;
   const [currentWeekStart, setCurrentWeekStart] = useState(getTodaySundayStr());
-  const [review, setReview] = useState<WeeklyReview | null>(null);
-  const [prevTryItems, setPrevTryItems] = useState<KPTItem[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const weekCacheKey = `weekly_review_${currentWeekStart}`;
+  const { data: swrData, isLoading, isValidating, revalidate } =
+    useStaleWhileRevalidate<WeeklyReviewData>({
+      key: weekCacheKey,
+      fetcher: async () => {
+        if (!email) throw new Error("not authenticated");
+        const headers = { "X-User-Email": email };
+        const [reviewRes, prevRes, analysisRes] = await Promise.all([
+          apiFetch(`/reviews/weekly/${currentWeekStart}`, { headers }),
+          apiFetch(`/reviews/weekly/${getPrevSundayStr(currentWeekStart)}`, { headers })
+            .then(async (r) => {
+              if (!r.ok) throw new Error();
+              const data: WeeklyReview = await r.json();
+              return data.kpt_items.filter((i) => i.type === "try");
+            })
+            .catch(() => [] as KPTItem[]),
+          apiFetch(`/reviews/weekly/${currentWeekStart}/analysis`, { headers }),
+        ]);
+        const reviewData: WeeklyReview = await reviewRes.json();
+        if (analysisRes.ok) {
+          const analysisData: { analysis: string; created_at: string } = await analysisRes.json();
+          setAiAnalysis(analysisData.analysis);
+          setAiCreatedAt(analysisData.created_at);
+        }
+        return { review: reviewData, prevTryItems: prevRes };
+      },
+      ttlMs: 60 * 60 * 1000,
+    });
+
+  const [review, setReview] = useState<WeeklyReview | null>(swrData?.review ?? null);
+  const [prevTryItems, setPrevTryItems] = useState<KPTItem[]>(swrData?.prevTryItems ?? []);
   const [addingType, setAddingType] = useState<KPTType | null>(null);
   const [newContent, setNewContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -92,17 +129,30 @@ export default function WeeklyReviewPage() {
     (review?.kpt_items.filter((i) => i.type === "problem").length ?? 0) > 0 ||
     (review?.kpt_items.filter((i) => i.type === "try").length ?? 0) > 0;
 
+  // SWR データが更新されたらローカル state に同期
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace("/login");
+    if (swrData) {
+      setReview(swrData.review);
+      setPrevTryItems(swrData.prevTryItems);
     }
-  }, [status, router]);
+  }, [swrData]);
+
+  // 週が変わったら AI 分析をリセット
+  useEffect(() => {
+    setAiAnalysis(null);
+    setAiCreatedAt(null);
+  }, [currentWeekStart]);
 
   useEffect(() => {
-    if (status !== "authenticated" || !session?.user?.email) return;
-    loadReview();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentWeekStart, status, session?.user?.email]);
+    if (status === "unauthenticated") router.replace("/login");
+  }, [status, router]);
+
+  // 認証完了時に revalidate を起動
+  useEffect(() => {
+    if (status !== "authenticated" || !email) return;
+    revalidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   useEffect(() => {
     if (addingType && inputRef.current) {
@@ -115,42 +165,6 @@ export default function WeeklyReviewPage() {
       editRef.current.focus();
     }
   }, [editingId]);
-
-  async function loadReview() {
-    setLoading(true);
-    setPrevTryItems([]);
-    setAiAnalysis(null);
-    setAiCreatedAt(null);
-    const email = session!.user!.email!;
-    const headers = { "X-User-Email": email };
-
-    try {
-      const [reviewRes, prevRes, analysisRes] = await Promise.all([
-        apiFetch(`/reviews/weekly/${currentWeekStart}`, { headers }),
-        apiFetch(
-          `/reviews/weekly/${getPrevSundayStr(currentWeekStart)}`,
-          { headers }
-        ).then(async (r) => {
-          if (!r.ok) throw new Error();
-          const data: WeeklyReview = await r.json();
-          return data.kpt_items.filter((i) => i.type === "try");
-        }).catch(() => [] as KPTItem[]),
-        apiFetch(`/reviews/weekly/${currentWeekStart}/analysis`, { headers }),
-      ]);
-
-      const reviewData: WeeklyReview = await reviewRes.json();
-      setReview(reviewData);
-      setPrevTryItems(prevRes);
-
-      if (analysisRes.ok) {
-        const analysisData: { analysis: string; created_at: string } = await analysisRes.json();
-        setAiAnalysis(analysisData.analysis);
-        setAiCreatedAt(analysisData.created_at);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleGenerateAnalysis() {
     const email = session!.user!.email!;
@@ -173,7 +187,7 @@ export default function WeeklyReviewPage() {
 
   async function handleAdd() {
     if (!addingType || !newContent.trim() || !review) return;
-    const email = session!.user!.email!;
+    const userEmail = session!.user!.email!;
     const type = addingType;
     const content = newContent.trim();
     const reviewId = review.id;
@@ -185,27 +199,29 @@ export default function WeeklyReviewPage() {
     try {
       const res = await apiFetch(`/reviews/weekly/${reviewId}/kpt`, {
         method: "POST",
-        headers: { "X-User-Email": email },
+        headers: { "X-User-Email": userEmail },
         body: JSON.stringify({ type, content }),
       });
       const item: KPTItem = await res.json();
       setReview((prev) => prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === tempId ? item : i)) } : prev);
+      invalidateSWRCache(weekCacheKey);
     } catch {
       setReview((prev) => prev ? { ...prev, kpt_items: prev.kpt_items.filter((i) => i.id !== tempId) } : prev);
     }
   }
 
   async function handleToggleComplete(item: KPTItem) {
-    const email = session!.user!.email!;
+    const userEmail = session!.user!.email!;
     setReview((prev) =>
       prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === item.id ? { ...i, is_completed: !i.is_completed } : i)) } : prev
     );
     try {
       await apiFetch(`/reviews/weekly/${item.review_id}/kpt/${item.id}`, {
         method: "PUT",
-        headers: { "X-User-Email": email },
+        headers: { "X-User-Email": userEmail },
         body: JSON.stringify({ is_completed: !item.is_completed }),
       });
+      invalidateSWRCache(weekCacheKey);
     } catch {
       setReview((prev) =>
         prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === item.id ? item : i)) } : prev
@@ -215,7 +231,7 @@ export default function WeeklyReviewPage() {
 
   async function handleEditSave(itemId: number) {
     if (!editContent.trim()) return;
-    const email = session!.user!.email!;
+    const userEmail = session!.user!.email!;
     const content = editContent.trim();
     const prevItem = review?.kpt_items.find((i) => i.id === itemId);
     const reviewId = review?.id;
@@ -228,13 +244,14 @@ export default function WeeklyReviewPage() {
     try {
       const res = await apiFetch(`/reviews/weekly/${reviewId}/kpt/${itemId}`, {
         method: "PUT",
-        headers: { "X-User-Email": email },
+        headers: { "X-User-Email": userEmail },
         body: JSON.stringify({ content }),
       });
       const updated: KPTItem = await res.json();
       setReview((prev) =>
         prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === updated.id ? updated : i)) } : prev
       );
+      invalidateSWRCache(weekCacheKey);
     } catch {
       if (prevItem) setReview((prev) =>
         prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === itemId ? prevItem : i)) } : prev
@@ -245,7 +262,7 @@ export default function WeeklyReviewPage() {
   }
 
   async function handleDelete(itemId: number) {
-    const email = session!.user!.email!;
+    const userEmail = session!.user!.email!;
     const reviewId = review?.id;
     if (!reviewId) return;
     const prevItems = review?.kpt_items ?? [];
@@ -255,8 +272,9 @@ export default function WeeklyReviewPage() {
     try {
       await apiFetch(`/reviews/weekly/${reviewId}/kpt/${itemId}`, {
         method: "DELETE",
-        headers: { "X-User-Email": email },
+        headers: { "X-User-Email": userEmail },
       });
+      invalidateSWRCache(weekCacheKey);
     } catch {
       setReview((prev) => prev ? { ...prev, kpt_items: prevItems } : prev);
     }
@@ -266,10 +284,11 @@ export default function WeeklyReviewPage() {
     return review?.kpt_items.filter((i) => i.type === type) ?? [];
   }
 
-  if (status === "loading" || loading) return <PageLoading />;
+  if (status === "loading" || isLoading) return <SkeletonReviewPage />;
 
   return (
     <main>
+      <ValidatingIndicator isValidating={isValidating} />
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">

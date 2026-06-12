@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
-import { PageLoading } from "@/components/PageLoading";
 import { apiFetch } from "@/lib/api";
+import { SkeletonMemoPage } from "@/components/Skeleton";
+import { useStaleWhileRevalidate, invalidateSWRCache } from "@/hooks/useStaleWhileRevalidate";
+import { ValidatingIndicator } from "@/components/ValidatingIndicator";
 
 interface ScheduledTodo {
   id: number;
@@ -100,9 +102,36 @@ function sortByCategory(todos: ScheduledTodo[]): ScheduledTodo[] {
 export default function MemoPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const email = session?.user?.email;
 
-  const [todos, setTodos] = useState<ScheduledTodo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: swrTodos, isLoading, isValidating, revalidate } =
+    useStaleWhileRevalidate<ScheduledTodo[]>({
+      key: "scheduled_todos",
+      fetcher: async () => {
+        if (!email) throw new Error("not authenticated");
+        const res = await apiFetch(`/scheduled-todos`, {
+          headers: { "X-User-Email": email },
+        });
+        if (!res.ok) throw new Error("fetch failed");
+        return res.json();
+      },
+      ttlMs: 30 * 60 * 1000,
+    });
+
+  const [todos, setTodos] = useState<ScheduledTodo[]>(swrTodos ?? []);
+
+  // SWR データが更新されたらローカル state に同期
+  useEffect(() => {
+    if (swrTodos) setTodos(swrTodos);
+  }, [swrTodos]);
+
+  // 認証完了時に revalidate を起動
+  useEffect(() => {
+    if (status === "unauthenticated") { router.replace("/login"); return; }
+    if (status !== "authenticated" || !email) return;
+    revalidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   // Subtask state
   const [expandedIds, setExpandedIds] = useState<Record<number, boolean>>({});
@@ -122,34 +151,10 @@ export default function MemoPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (status === "loading") return;
-    if (status === "unauthenticated") { router.replace("/login"); return; }
-    fetchTodos();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, router]);
-
-  useEffect(() => {
     function onKeyDown(e: KeyboardEvent) { if (e.key === "Escape") closeModal(); }
     if (modalOpen) window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [modalOpen]);
-
-  async function fetchTodos() {
-    const email = session?.user?.email;
-    if (!email) return;
-    setLoading(true);
-    try {
-      const res = await apiFetch(`/scheduled-todos`, {
-        headers: { "X-User-Email": email },
-      });
-      if (res.ok) {
-        const data: ScheduledTodo[] = await res.json();
-        setTodos(data);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function openAddModal() {
     setEditingId(null);
@@ -193,7 +198,6 @@ export default function MemoPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!modalTitle.trim() || isSubmitting) return;
-    const email = session?.user?.email;
     if (!email) return;
 
     const body = {
@@ -217,6 +221,8 @@ export default function MemoPage() {
           const updated: ScheduledTodo = await res.json();
           setTodos((prev) => sortByCategory(prev.map((t) => (t.id === editingId ? updated : t))));
           closeModal();
+          invalidateSWRCache("scheduled_todos");
+          revalidate();
         }
       } else {
         const res = await apiFetch(`/scheduled-todos`, {
@@ -228,6 +234,8 @@ export default function MemoPage() {
           const created: ScheduledTodo = await res.json();
           setTodos((prev) => sortByCategory([...prev, created]));
           closeModal();
+          invalidateSWRCache("scheduled_todos");
+          revalidate();
         }
       }
     } finally {
@@ -236,7 +244,6 @@ export default function MemoPage() {
   }
 
   async function handleDelete(id: number) {
-    const email = session?.user?.email;
     if (!email) return;
     const prev = todos;
     setTodos((t) => t.filter((item) => item.id !== id));
@@ -245,7 +252,12 @@ export default function MemoPage() {
         method: "DELETE",
         headers: { "X-User-Email": email },
       });
-      if (!res.ok && res.status !== 204) setTodos(prev);
+      if (!res.ok && res.status !== 204) {
+        setTodos(prev);
+      } else {
+        invalidateSWRCache("scheduled_todos");
+        revalidate();
+      }
     } catch {
       setTodos(prev);
     }
@@ -516,12 +528,13 @@ export default function MemoPage() {
     { label: "月の振り返り", onClick: () => router.push("/review/monthly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
   ];
 
-  if (status === "loading" || loading) return <PageLoading />;
+  if (status === "loading" || isLoading) return <SkeletonMemoPage />;
 
   const hasTime = !!modalTime;
 
   return (
     <>
+      <ValidatingIndicator isValidating={isValidating} />
       {/* Modal */}
       {modalOpen && (
         <div

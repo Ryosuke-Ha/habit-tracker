@@ -1,11 +1,13 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 import models
-from database import SessionLocal, engine
+from database import SessionLocal, engine, get_db
 from domain.exceptions import DomainError
 from routers import ai_analysis, coaching, habits, monthly_reviews, notifications, persistent_todos, reviews, scheduled_todos, settings, subtasks, templates
 
@@ -45,8 +47,12 @@ async def domain_error_handler(request, exc: DomainError):
 
 
 @app.get("/health")
-async def health_check():
-    return {"status": "ok"}
+def health_check(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "db": "ok"}
+    except Exception:
+        return {"status": "ok", "db": "unavailable"}
 
 
 def seed_data():

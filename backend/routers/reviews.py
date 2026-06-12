@@ -18,6 +18,7 @@ from services.weekly_stats import (
     get_last_week_try_completion,
     get_weekly_stats,
 )
+from utils.cache import get_cached, invalidate_cache_prefix, set_cached
 
 router = APIRouter(prefix="/reviews", tags=["reviews"], dependencies=[Depends(verify_api_key)])
 
@@ -173,8 +174,15 @@ def get_current_review(
     user_email: str = Depends(require_user),
 ):
     week_start = WeekPeriod.current().start
+    cache_key = f"weekly_review_{user_email}_{week_start.isoformat()}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+
     review = get_or_create_review(db, user_email, week_start)
-    return _build_review_with_stats(review, db)
+    result = _build_review_with_stats(review, db)
+    set_cached(cache_key, result, ttl_seconds=300)
+    return result
 
 
 @router.get("/weekly", response_model=List[WeeklyReviewOut])
@@ -197,8 +205,15 @@ def get_review_by_date(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     week_start = WeekPeriod.from_date(date).start
+    cache_key = f"weekly_review_{user_email}_{week_start.isoformat()}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+
     review = get_or_create_review(db, user_email, week_start)
-    return _build_review_with_stats(review, db)
+    result = _build_review_with_stats(review, db)
+    set_cached(cache_key, result, ttl_seconds=300)
+    return result
 
 
 @router.post("/weekly/{review_id}/kpt", response_model=KPTItemOut)
@@ -220,6 +235,7 @@ def add_kpt_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+    invalidate_cache_prefix(f"weekly_review_{user_email}_")
     return item
 
 
@@ -249,6 +265,7 @@ def update_kpt_item(
         item.is_completed = body.is_completed
     db.commit()
     db.refresh(item)
+    invalidate_cache_prefix(f"weekly_review_{user_email}_")
     return item
 
 
@@ -273,6 +290,7 @@ def delete_kpt_item(
         raise HTTPException(status_code=404, detail=str(e))
     db.delete(item)
     db.commit()
+    invalidate_cache_prefix(f"weekly_review_{user_email}_")
 
 
 # ---- Deprecated endpoints (backward-compatible) ----
@@ -310,6 +328,7 @@ def update_kpt_item_deprecated(
         item.is_completed = body.is_completed
     db.commit()
     db.refresh(item)
+    invalidate_cache_prefix(f"weekly_review_{user_email}_")
     return item
 
 
@@ -341,3 +360,4 @@ def delete_kpt_item_deprecated(
         raise HTTPException(status_code=404, detail=str(e))
     db.delete(item)
     db.commit()
+    invalidate_cache_prefix(f"weekly_review_{user_email}_")

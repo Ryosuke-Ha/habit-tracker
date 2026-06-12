@@ -1,46 +1,35 @@
 interface BackendErrorProps {
-  nextRetryIn: number
   onRetry: () => void
+  message?: string
 }
 
-export function BackendError({ nextRetryIn, onRetry }: BackendErrorProps) {
+export function BackendError({
+  onRetry,
+  message = "サーバーに接続できません。",
+}: BackendErrorProps) {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-6">
       <div className="max-w-sm w-full border border-red-800 bg-red-950/20 p-8 text-center">
-
-        <div className="text-6xl mb-6">⚠️</div>
-
-        <h1 className="text-red-400 text-lg font-bold mb-2 tracking-wider">
-          SERVER ERROR
+        <div className="text-4xl mb-4">⚠️</div>
+        <h1 className="text-red-400 text-sm font-bold mb-2">
+          接続エラー
         </h1>
-
-        <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-          サーバーに接続できません。<br />
-          しばらくお待ちください。
+        <p className="text-gray-400 text-xs mb-6 leading-relaxed">
+          {message}
         </p>
-
-        {nextRetryIn > 0 ? (
-          <p className="text-gray-500 text-xs mb-6">
-            🔄 {nextRetryIn}秒後に再接続します...
-          </p>
-        ) : (
-          <p className="text-yellow-500 text-xs mb-6 animate-pulse">
-            🔄 再接続中...
-          </p>
-        )}
-
         <button
           onClick={onRetry}
-          className="w-full border border-red-700 text-red-400 py-3 text-sm hover:bg-red-900/30 transition-colors tracking-wider"
+          className="w-full border border-red-700 text-red-400 py-3 text-xs
+                     hover:bg-red-900/30 transition-colors"
         >
-          今すぐ再接続
+          再接続する
         </button>
-
         <a
           href="https://status.railway.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="block mt-4 text-gray-600 text-xs hover:text-gray-400 transition-colors underline"
+          className="block mt-3 text-gray-600 text-xs hover:text-gray-400
+                     transition-colors underline"
         >
           サービスステータスを確認
         </a>

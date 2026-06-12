@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
-import { PageLoading } from "@/components/PageLoading";
+import { SkeletonReviewPage } from "@/components/Skeleton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -189,7 +189,7 @@ export default function MonthlyReviewPage() {
   const overallPct = stats ? Math.round(stats.overall_rate * 100) : null;
   const hasStats = stats !== null && stats.daily_rates.length > 0;
 
-  if (status === "loading" || loading) return <PageLoading />;
+  if (status === "loading" || loading) return <SkeletonReviewPage />;
 
   return (
     <main>

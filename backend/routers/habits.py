@@ -10,6 +10,7 @@ import models
 from auth import verify_api_key
 from database import get_db
 from services.domain.daily_log_service import DailyLogGenerationService
+from utils.cache import invalidate_cache_prefix
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -235,6 +236,46 @@ def create_standalone_log(body: StandaloneLogCreate, db: Session = Depends(get_d
     return _build_log_response(log)
 
 
+@router.post("/logs/from-persistent-todo/{persistent_todo_id}", response_model=LogResponse)
+def convert_from_persistent_todo(
+    persistent_todo_id: int,
+    body: StandaloneLogCreate,
+    db: Session = Depends(get_db),
+):
+    """Convert a PersistentTodo to a DailyLog, migrating its SubTasks."""
+    todo = db.query(models.PersistentTodo).filter(
+        models.PersistentTodo.id == persistent_todo_id,
+    ).first()
+    if not todo:
+        raise HTTPException(status_code=404, detail="Persistent todo not found")
+
+    today = _today_jst()
+    log = models.DailyLog(
+        habit_id=None,
+        date=today,
+        is_checked=False,
+        title=body.title,
+        scheduled_time=body.scheduled_time,
+        location=body.location,
+        template_id=body.template_id,
+    )
+    db.add(log)
+    db.flush()
+
+    subtasks = db.query(models.SubTask).filter(
+        models.SubTask.todo_type == "persistent_todo",
+        models.SubTask.todo_id == persistent_todo_id,
+    ).all()
+    for subtask in subtasks:
+        subtask.todo_type = "habit_log"
+        subtask.todo_id = log.id
+
+    db.delete(todo)
+    db.commit()
+    db.refresh(log)
+    return _build_log_response(log)
+
+
 @router.put("/logs/standalone/{log_id}", response_model=LogResponse)
 def update_standalone_log(log_id: int, body: StandaloneLogUpdate, db: Session = Depends(get_db)):
     log = db.query(models.DailyLog).filter(
@@ -297,6 +338,7 @@ def toggle_log(log_id: int, db: Session = Depends(get_db)):
     log.toggle()
     db.commit()
     db.refresh(log)
+    invalidate_cache_prefix("weekly_review_")
 
     if log.habit_id is not None:
         habit = db.query(models.Habit).filter(models.Habit.id == log.habit_id).first()

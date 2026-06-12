@@ -1,4 +1,3 @@
-import json
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -41,36 +40,48 @@ Step4: 目標・アクションの言語化（Tryを具体化）
 Step5: セッションのまとめ・来週への問いかけ
 
 現在のコンテキスト:
-{context}
-
-前回のセッション内容:
-{previous_session}"""
+{context}"""
 
 
-def build_coaching_context(user_id: str, db: Session) -> dict:
-    """Gather and pre-process all coaching context data for the current week."""
+def build_coaching_context(user_id: str, db: Session) -> str:
+    """Gather and pre-process coaching context, returning XML-structured string."""
     week_period = WeekPeriod.current()
     week_start = week_period.start
-    week_end = week_period.end
 
     stats = get_weekly_stats(week_start, db)
-    vs_last_week = get_achievement_rate_vs_last_week(week_start, stats["achievement_rate"], db)
+    achievement_rate = stats["achievement_rate"]
+    checked = stats["checked_habits"]
+    total = stats["total_habits"]
+    weakest_habit: Optional[str] = stats.get("weakest_habit")
+    strongest_habit: Optional[str] = stats.get("strongest_habit")
+    vs_last_week = get_achievement_rate_vs_last_week(week_start, achievement_rate, db) or "データなし"
 
     review = db.query(models.WeeklyReview).filter_by(user_id=user_id, week_start_date=week_start).first()
-    kpt_data: dict = {"keep": [], "problem": [], "try": []}
+    keep_items: list = []
+    problem_items: list = []
+    try_items: list = []
     if review:
         for item in review.kpt_items:
-            if len(kpt_data[item.type]) < 3:
-                kpt_data[item.type].append(item.content)
+            if item.type == "keep" and len(keep_items) < 3:
+                keep_items.append(item.content)
+            elif item.type == "problem" and len(problem_items) < 3:
+                problem_items.append(item.content)
+            elif item.type == "try" and len(try_items) < 3:
+                try_items.append(item.content)
 
     prev_week_start = WeekPeriod.previous().start
     prev_review = db.query(models.WeeklyReview).filter_by(user_id=user_id, week_start_date=prev_week_start).first()
-    prev_try_items: list = []
+    last_week_try_items: list = []
     if prev_review:
-        prev_try_items = [
-            {"content": i.content, "is_completed": i.is_completed}
-            for i in prev_review.kpt_items if i.type == "try"
-        ][:3]
+        prev_try_kpt = [i for i in prev_review.kpt_items if i.type == "try"][:3]
+        last_week_try_items = [
+            f"{i.content}（{'達成' if i.is_completed else '未達成'}）"
+            for i in prev_try_kpt
+        ]
+        completed = sum(1 for i in prev_try_kpt if i.is_completed)
+        last_week_try_completion = f"{completed}/{len(prev_try_kpt)}"
+    else:
+        last_week_try_completion = "なし"
 
     active_goals = (
         db.query(models.CoachingGoal)
@@ -78,7 +89,7 @@ def build_coaching_context(user_id: str, db: Session) -> dict:
         .limit(3)
         .all()
     )
-    goals_data = [{"id": g.id, "title": g.title} for g in active_goals]
+    goals_data = [{"title": g.title} for g in active_goals]
 
     prev_session = (
         db.query(models.CoachingSession)
@@ -89,79 +100,42 @@ def build_coaching_context(user_id: str, db: Session) -> dict:
     raw_summary: Optional[str] = prev_session.summary if prev_session else None
     prev_summary: Optional[str] = raw_summary[:300] if raw_summary else None
 
-    return {
-        "achievement": {
-            "this_week_rate": stats["achievement_rate"],
-            "vs_last_week": vs_last_week,
-            "weakest_habit": stats.get("weakest_habit"),
-            "strongest_habit": stats.get("strongest_habit"),
-        },
-        "kpt": kpt_data,
-        "prev_try_items": prev_try_items,
-        "active_goals": goals_data,
-        "prev_session_summary": prev_summary,
-        "week_start": week_start.isoformat(),
-        "week_end": week_end.isoformat(),
-    }
+    nl = chr(10)
+    return f"""<coaching_context>
+  <achievement>
+    <this_week_rate>{achievement_rate}%</this_week_rate>
+    <vs_last_week>{vs_last_week}</vs_last_week>
+    <weakest_habit>{weakest_habit or "なし"}</weakest_habit>
+    <strongest_habit>{strongest_habit or "なし"}</strongest_habit>
+    <checked>{checked}</checked>
+    <total>{total}</total>
+  </achievement>
+  <kpt>
+    <problem>{nl.join(f"- {i}" for i in problem_items) or "なし"}</problem>
+    <try>{nl.join(f"- {i}" for i in try_items) or "なし"}</try>
+    <keep>{nl.join(f"- {i}" for i in keep_items) or "なし"}</keep>
+  </kpt>
+  <last_week_try>
+    <completion>{last_week_try_completion}</completion>
+    <items>{nl.join(f"- {i}" for i in last_week_try_items) or "なし"}</items>
+  </last_week_try>
+  <active_goals>
+    {nl.join(f"- {g['title']}" for g in goals_data) or "なし"}
+  </active_goals>
+  <previous_session>
+    {prev_summary or "なし"}
+  </previous_session>
+</coaching_context>"""
 
 
-def _format_context_str(context_data: dict) -> str:
-    """Format coaching context data into a readable string for Claude."""
-    achievement = context_data.get("achievement", {})
-    rate = achievement.get("this_week_rate", 0)
-    vs_last = achievement.get("vs_last_week")
-    weakest = achievement.get("weakest_habit")
-    strongest = achievement.get("strongest_habit")
-    kpt = context_data.get("kpt", {})
-    prev_try = context_data.get("prev_try_items", [])
-    goals = context_data.get("active_goals", [])
-    week_start = context_data.get("week_start", "")
-    week_end = context_data.get("week_end", "")
-
-    rate_line = f"【今週の習慣達成率】{rate}%"
-    if vs_last:
-        rate_line += f"（先週比 {vs_last}）"
-
-    lines = [
-        f"【今週】{week_start} 〜 {week_end}",
-        rate_line,
-    ]
-    if strongest:
-        lines.append(f"【最も達成できた習慣】{strongest}")
-    if weakest:
-        lines.append(f"【最も苦手な習慣】{weakest}")
-    if kpt.get("keep"):
-        lines.append("【Keep】" + "、".join(kpt["keep"]))
-    if kpt.get("problem"):
-        lines.append("【Problem】" + "、".join(kpt["problem"]))
-    if kpt.get("try"):
-        lines.append("【Try（今週の目標）】" + "、".join(kpt["try"]))
-    if prev_try:
-        parts = [f"{i['content']}（{'達成' if i['is_completed'] else '未達成'}）" for i in prev_try]
-        lines.append("【先週のTry】" + "、".join(parts))
-    else:
-        lines.append("【先週のTry】なし")
-    if goals:
-        lines.append("【アクティブなゴール】" + "、".join(g["title"] for g in goals))
-    else:
-        lines.append("【アクティブなゴール】なし")
-    return "\n".join(lines)
-
-
-def build_system_prompt(context_data: dict) -> str:
-    """Build the full system prompt from context data."""
-    context_str = _format_context_str(context_data)
-    prev_summary = context_data.get("prev_session_summary") or "（前回のセッションなし）"
-    return (
-        SYSTEM_PROMPT_TEMPLATE
-        .replace("{context}", context_str)
-        .replace("{previous_session}", prev_summary)
-    )
+def build_system_prompt(context: str) -> str:
+    """Build the full system prompt from XML context string."""
+    return SYSTEM_PROMPT_TEMPLATE.replace("{context}", context)
 
 
 def build_message_context(session, messages: list, max_recent: int = 5) -> tuple:
     """Return (system_prompt, recent_messages) limiting to last max_recent messages."""
-    context_data = json.loads(session.context) if session.context else {}
-    system = build_system_prompt(context_data)
+    context_xml = session.context or ""
+    system = build_system_prompt(context_xml)
     recent = messages[-max_recent:] if len(messages) > max_recent else messages
     return system, recent

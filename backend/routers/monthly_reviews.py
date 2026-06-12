@@ -12,6 +12,7 @@ from auth import verify_api_key
 from database import SessionLocal
 from domain.value_objects import YearMonth
 from services.domain.achievement_service import MonthlyAchievementService
+from utils.cache import get_cached, invalidate_cache_prefix, set_cached
 
 router = APIRouter(prefix="/reviews", tags=["monthly-reviews"], dependencies=[Depends(verify_api_key)])
 
@@ -209,6 +210,11 @@ def get_monthly_stats(
     db: Session = Depends(get_db),
     _user_email: str = Depends(require_user),
 ):
+    cache_key = f"monthly_stats_{year_month}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+
     try:
         ym_obj = YearMonth.from_string(year_month)
         year, month = ym_obj.year, ym_obj.month
@@ -282,12 +288,14 @@ def get_monthly_stats(
             rate=round(w_checked / w_total, 4) if w_total > 0 else 0.0,
         ))
 
-    return MonthlyStats(
+    result = MonthlyStats(
         overall_rate=overall_rate,
         streak=streak,
         daily_rates=daily_rates,
         weekly_rates=weekly_rates,
     )
+    set_cached(cache_key, result, ttl_seconds=3600)
+    return result
 
 
 @router.get("/monthly/{year_month}", response_model=MonthlyReviewOut)
@@ -321,4 +329,5 @@ def update_monthly_review(
     review.next_month_goal = body.next_month_goal
     db.commit()
     db.refresh(review)
+    invalidate_cache_prefix("monthly_stats_")
     return review

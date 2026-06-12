@@ -8,9 +8,11 @@ import { DailyLogEntry } from "@/components/HabitList";
 import TodoItem, { TodoEntry } from "@/components/TodoItem";
 import HamburgerMenu from "@/components/HamburgerMenu";
 import { useSetting } from "@/hooks/useSetting"
-import { useBackendHealth } from "@/hooks/useBackendHealth"
 import { BackendError } from "@/components/BackendError";
 import { apiFetch } from "@/lib/api";
+import { SkeletonTodoPage } from "@/components/Skeleton";
+import { ValidatingIndicator } from "@/components/ValidatingIndicator";
+import { getFromCache, setToCache, invalidateSWRCachePrefix } from "@/hooks/useStaleWhileRevalidate";
 
 interface Template { id: number; name: string; }
 
@@ -82,8 +84,13 @@ export default function Home() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { getSetting, setSetting, ready: settingReady } = useSetting();
-  const { status: healthStatus, nextRetryIn, checkHealth } = useBackendHealth();
   const [phase, setPhase] = useState<Phase>("initial");
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+
+  const d = new Date();
+  const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const todayCacheKey = `today_logs_${todayStr}`;
   const [animationDone, setAnimationDone] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [showAnimation, setShowAnimation] = useState(false);
@@ -131,15 +138,6 @@ export default function Home() {
     if (animationDone && dataReady) setPhase("content");
   }, [animationDone, dataReady]);
 
-  // バックエンド復旧時にデータを再フェッチ
-  useEffect(() => {
-    if (healthStatus === "healthy" && status === "authenticated" && phase === "loading" && settingReady) {
-      setDataReady(false);
-      fetchData();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [healthStatus]);
-
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) { if (e.key === "Escape") closeModal(); }
     if (addModalOpen) window.addEventListener("keydown", onKeyDown);
@@ -150,8 +148,24 @@ export default function Home() {
     const email = session?.user?.email;
     const authHeaders: Record<string, string> = email ? { "X-User-Email": email } : {};
 
+    // キャッシュがあれば即座に表示
+    const cachedLogs = getFromCache<LogApiResponse[]>(todayCacheKey);
+    if (cachedLogs) {
+      setDailyLogs(cachedLogs.map((l) => ({
+        logId: l.id,
+        habitId: l.habit_id,
+        title: l.title,
+        scheduledTime: l.scheduled_time,
+        location: l.location,
+        isChecked: l.is_checked,
+      })));
+      setDataReady(true);
+      setIsValidating(true);
+    }
+
     try {
       const templatesRes = await apiFetch(`/templates`);
+      if (!templatesRes.ok) throw new Error();
       const templates: Template[] = await templatesRes.json();
 
       let matched: Template | undefined;
@@ -182,6 +196,7 @@ export default function Home() {
       ]);
 
       const logsData: LogApiResponse[] = await logsRes.json();
+      setToCache(todayCacheKey, logsData, 24 * 60 * 60 * 1000);
       setDailyLogs(logsData.map((l) => ({
         logId: l.id,
         habitId: l.habit_id,
@@ -218,8 +233,14 @@ export default function Home() {
         const sData: { todos: ScheduledTodo[] } = await scheduledRes.json();
         setScheduledTodos(sData.todos);
       }
+      setFetchError(null);
+    } catch {
+      if (!cachedLogs) {
+        setFetchError("サーバーに接続できません。しばらくお待ちください。");
+      }
     } finally {
       setDataReady(true);
+      setIsValidating(false);
     }
   }
 
@@ -304,6 +325,7 @@ export default function Home() {
     setDailyLogs((prev) => prev.map((l) => l.logId === logId ? { ...l, isChecked: !l.isChecked } : l));
     try {
       await apiFetch(`/logs/${logId}/toggle`, { method: "POST" });
+      invalidateSWRCachePrefix("today_logs_");
     } catch {
       setDailyLogs((prev) => prev.map((l) => l.logId === logId ? prevLog : l));
     }
@@ -314,6 +336,7 @@ export default function Home() {
     setDailyLogs((prev) => prev.filter((l) => l.logId !== logId));
     try {
       await apiFetch(`/logs/${logId}`, { method: "DELETE" });
+      invalidateSWRCachePrefix("today_logs_");
     } catch {
       setDailyLogs(prevLogs);
     }
@@ -429,8 +452,7 @@ export default function Home() {
     setDailyLogs((prev) => prev.filter((l) => l.logId !== logId));
     setPersistentTodos((prev) => [...prev, tempPersistent]);
     try {
-      await apiFetch(`/logs/${logId}`, { method: "DELETE" });
-      const res = await apiFetch(`/persistent-todos`, {
+      const res = await apiFetch(`/persistent-todos/from-daily-log/${logId}`, {
         method: "POST",
         headers: { "X-User-Email": email },
         body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time || null, location: data.location }),
@@ -454,8 +476,7 @@ export default function Home() {
     setPersistentTodos((prev) => prev.filter((t) => t.id !== id));
     setDailyLogs((prev) => [...prev, tempLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
     try {
-      await apiFetch(`/persistent-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
-      const res = await apiFetch(`/logs/standalone`, {
+      const res = await apiFetch(`/logs/from-persistent-todo/${id}`, {
         method: "POST",
         body: JSON.stringify({ title: data.title, scheduled_time: data.scheduled_time, location: data.location, template_id: templateId }),
       });
@@ -517,10 +538,10 @@ export default function Home() {
   const incompleteItems = allItems.filter((item) => !isDone(item));
   const doneItems = allItems.filter((item) => isDone(item));
 
-  // 認証チェック中 / 設定読み込み中 / バックエンドヘルスチェック中
+  // 認証チェック中 / 設定読み込み中
   if (
     status === "loading" ||
-    (status === "authenticated" && (!settingReady || (healthStatus === "checking" && phase !== "content")))
+    (status === "authenticated" && !settingReady)
   ) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -539,27 +560,19 @@ export default function Home() {
     return null;
   }
 
-  // バックエンド障害中
-  if (healthStatus === "unhealthy") {
-    return <BackendError nextRetryIn={nextRetryIn} onRetry={checkHealth} />;
+  // データ取得エラー
+  if (fetchError) {
+    return <BackendError onRetry={fetchData} message={fetchError} />;
   }
 
-  // 通常時のデータ取得中（2回目以降の起動でアニメーションなし）
+  // データ取得中（2回目以降の起動でアニメーションなし）
   if (phase !== "content" && !showAnimation) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p
-          className="text-green-400 text-xs animate-pulse"
-          style={{ fontFamily: "'Press Start 2P', monospace" }}
-        >
-          LOADING...
-        </p>
-      </div>
-    );
+    return <SkeletonTodoPage />;
   }
 
   return (
     <>
+      <ValidatingIndicator isValidating={isValidating} />
       {phase === "loading" && showAnimation && (
         <LoadingOverlay onComplete={() => {
           setSetting("habit_app_launched", "true");

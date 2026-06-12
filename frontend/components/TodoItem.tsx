@@ -126,14 +126,14 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
     }
   }, [isDone]);
 
+  // Fetch subtasks on mount to show indicator even when collapsed
   useEffect(() => {
-    if (expanded && !subtasksLoaded) {
-      apiFetch(`/subtasks?todo_type=${subtaskType}&todo_id=${subtaskTodoId}`)
-        .then((r) => r.json())
-        .then((data: SubTask[]) => { setSubtasks(data); setSubtasksLoaded(true); })
-        .catch(() => setSubtasksLoaded(true));
-    }
-  }, [expanded]);
+    apiFetch(`/subtasks?todo_type=${subtaskType}&todo_id=${subtaskTodoId}`)
+      .then((r) => r.json())
+      .then((data: SubTask[]) => { setSubtasks(data); setSubtasksLoaded(true); })
+      .catch(() => setSubtasksLoaded(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleAddSubtask() {
     if (!newSubtaskTitle.trim() || isSubmitting) return;
@@ -331,9 +331,10 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
           </p>
           {/* Subtask summary badge (collapsed) */}
           {!expanded && subtasksLoaded && totalCount > 0 && (
-            <p className={`text-xs mt-0.5 font-medium ${allDone ? "text-green-500" : "text-gray-400"}`}>
-              {completedCount}/{totalCount} サブタスク
-            </p>
+            <div className={`flex items-center gap-1 text-xs mt-0.5 font-medium ${allDone ? "text-green-500" : "text-gray-400"}`}>
+              <span>{completedCount}/{totalCount} 完了</span>
+              <span>{allDone ? "✓" : "▼"}</span>
+            </div>
           )}
         </div>
 
