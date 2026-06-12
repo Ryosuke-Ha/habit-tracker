@@ -8,8 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 // DBから全設定を取得してキャッシュする
 type Cache = Record<string, string>;
@@ -22,7 +21,7 @@ async function fetchAllSettings(email: string): Promise<Cache> {
   if (_cache) return _cache;
   if (_cachePromise) return _cachePromise;
 
-  _cachePromise = fetch(`${API}/settings`, {
+  _cachePromise = apiFetch(`/settings`, {
     headers: { "X-User-Email": email },
   })
     .then((r) => r.json())
@@ -40,9 +39,9 @@ async function fetchAllSettings(email: string): Promise<Cache> {
 }
 
 async function putSetting(email: string, key: string, value: string): Promise<void> {
-  await fetch(`${API}/settings/${key}`, {
+  await apiFetch(`/settings/${key}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", "X-User-Email": email },
+    headers: { "X-User-Email": email },
     body: JSON.stringify({ value }),
   });
   // キャッシュを更新

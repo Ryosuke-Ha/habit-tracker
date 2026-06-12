@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
+import { apiFetch } from "@/lib/api"
 
 type HealthStatus = "checking" | "healthy" | "unhealthy"
 
@@ -10,8 +11,8 @@ export function useBackendHealth() {
   const checkHealth = useCallback(async () => {
     setStatus("checking")
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/health`,
+      const res = await apiFetch(
+        "/health",
         { signal: AbortSignal.timeout(5000) }
       )
       if (res.ok) {

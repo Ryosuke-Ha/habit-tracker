@@ -16,8 +16,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { apiFetch } from "@/lib/api";
 
 interface MonthlyReview {
   id: number;
@@ -128,9 +127,9 @@ export default function MonthlyReviewPage() {
     const h = { "X-User-Email": email };
     try {
       const [reviewRes, statsRes, analysisRes] = await Promise.all([
-        fetch(`${API}/reviews/monthly/${currentYM}`, { headers: h }),
-        fetch(`${API}/reviews/monthly/${currentYM}/stats`, { headers: h }),
-        fetch(`${API}/reviews/monthly/${currentYM}/analysis`, { headers: h }),
+        apiFetch(`/reviews/monthly/${currentYM}`, { headers: h }),
+        apiFetch(`/reviews/monthly/${currentYM}/stats`, { headers: h }),
+        apiFetch(`/reviews/monthly/${currentYM}/analysis`, { headers: h }),
       ]);
       const reviewData: MonthlyReview = await reviewRes.json();
       setReview(reviewData);
@@ -156,8 +155,8 @@ export default function MonthlyReviewPage() {
     if (isGenerating) return;
     setIsGenerating(true);
     try {
-      const res = await fetch(
-        `${API}/reviews/monthly/${currentYM}/analysis/generate`,
+      const res = await apiFetch(
+        `/reviews/monthly/${currentYM}/analysis/generate`,
         { method: "POST", headers: { "X-User-Email": email } }
       );
       if (res.ok) {
@@ -174,9 +173,9 @@ export default function MonthlyReviewPage() {
     if (!review) return;
     setSaving(true);
     const email = session!.user!.email!;
-    const res = await fetch(`${API}/reviews/monthly/${review.id}`, {
+    const res = await apiFetch(`/reviews/monthly/${review.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "X-User-Email": email },
+      headers: { "X-User-Email": email },
       body: JSON.stringify({ next_month_goal: goal }),
     });
     const updated: MonthlyReview = await res.json();

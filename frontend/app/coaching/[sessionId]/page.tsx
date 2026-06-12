@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 interface CoachingMessage {
   id: number;
@@ -57,7 +56,7 @@ export default function CoachingSessionPage() {
     if (!email) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API}/coaching/sessions/${sessionId}`, {
+      const res = await apiFetch(`/coaching/sessions/${sessionId}`, {
         headers: { "X-User-Email": email },
       });
       if (res.ok) {
@@ -91,9 +90,9 @@ export default function CoachingSessionPage() {
     setCoachingSession((prev) => prev ? { ...prev, messages: [...prev.messages, tempUserMsg] } : prev);
 
     try {
-      const res = await fetch(`${API}/coaching/sessions/${sessionId}/messages`, {
+      const res = await apiFetch(`/coaching/sessions/${sessionId}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        headers: { "X-User-Email": email },
         body: JSON.stringify({ content }),
       });
       if (res.ok) {
@@ -118,7 +117,7 @@ export default function CoachingSessionPage() {
     if (!email || isCompleting || !coachingSession) return;
     setIsCompleting(true);
     try {
-      const res = await fetch(`${API}/coaching/sessions/${sessionId}/complete`, {
+      const res = await apiFetch(`/coaching/sessions/${sessionId}/complete`, {
         method: "POST",
         headers: { "X-User-Email": email },
       });

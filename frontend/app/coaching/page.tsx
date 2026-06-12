@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import HamburgerMenu from "@/components/HamburgerMenu";
 import { PageLoading } from "@/components/PageLoading";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 interface CoachingSession {
   id: number;
@@ -78,9 +77,9 @@ export default function CoachingPage() {
     setLoading(true);
     try {
       const [currentRes, sessionsRes, goalsRes] = await Promise.all([
-        fetch(`${API}/coaching/sessions/current`, { headers: { "X-User-Email": email } }),
-        fetch(`${API}/coaching/sessions`, { headers: { "X-User-Email": email } }),
-        fetch(`${API}/coaching/goals`, { headers: { "X-User-Email": email } }),
+        apiFetch(`/coaching/sessions/current`, { headers: { "X-User-Email": email } }),
+        apiFetch(`/coaching/sessions`, { headers: { "X-User-Email": email } }),
+        apiFetch(`/coaching/goals`, { headers: { "X-User-Email": email } }),
       ]);
       setCurrentSession(currentRes.ok ? await currentRes.json() : null);
       if (sessionsRes.ok) setSessions(await sessionsRes.json());
@@ -95,9 +94,9 @@ export default function CoachingPage() {
     if (!email || startingSession) return;
     setStartingSession(true);
     try {
-      const res = await fetch(`${API}/coaching/sessions`, {
+      const res = await apiFetch(`/coaching/sessions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        headers: { "X-User-Email": email },
       });
       if (res.ok) {
         const newSession = await res.json();
@@ -116,9 +115,9 @@ export default function CoachingPage() {
     if (!email || !newGoalTitle.trim() || addingGoal) return;
     setAddingGoal(true);
     try {
-      const res = await fetch(`${API}/coaching/goals`, {
+      const res = await apiFetch(`/coaching/goals`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-User-Email": email },
+        headers: { "X-User-Email": email },
         body: JSON.stringify({ title: newGoalTitle.trim() }),
       });
       if (res.ok) {
@@ -135,9 +134,9 @@ export default function CoachingPage() {
   async function handleCompleteGoal(goalId: number) {
     const email = session?.user?.email;
     if (!email) return;
-    const res = await fetch(`${API}/coaching/goals/${goalId}`, {
+    const res = await apiFetch(`/coaching/goals/${goalId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "X-User-Email": email },
+      headers: { "X-User-Email": email },
       body: JSON.stringify({ status: "completed" }),
     });
     if (res.ok) {
