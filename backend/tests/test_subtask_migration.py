@@ -1,6 +1,5 @@
-import pytest
 from unittest.mock import MagicMock
-from models import DailyLog, PersistentTodo, SubTask
+from models import DailyLog, SubTask
 
 
 class TestSubTaskMigration:
