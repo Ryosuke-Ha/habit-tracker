@@ -4,20 +4,31 @@ import subprocess
 import anthropic
 from github import Github
 
-MAX_DIFF_CHARS = 20000
+MAX_DIFF_CHARS = 50000
 
 
 def get_pr_diff() -> str:
     """PRの差分を取得する"""
-    base_sha = os.environ["BASE_SHA"]
-    head_sha = os.environ["HEAD_SHA"]
+    base_sha = os.environ.get("BASE_SHA", "")
+    head_sha = os.environ.get("HEAD_SHA", "")
+
+    # BASE_SHAが空の場合（初回open時）はmainブランチとの差分を取得
+    if not base_sha:
+        base_sha = subprocess.run(
+            ["git", "merge-base", "HEAD", "origin/main"],
+            capture_output=True, text=True
+        ).stdout.strip()
+
+    if not base_sha or not head_sha:
+        return ""
 
     result = subprocess.run(
         [
-            "git", "diff", f"{base_sha}..{head_sha}",
+            "git", "diff", f"{base_sha}...{head_sha}",
             "--",
             "frontend/", "backend/", "mobile/", "slack-bot/",
             ":!**/node_modules/**", ":!**/venv/**", ":!**/*.lock",
+            ":!**/*.coverage", ":!**/tsconfig.tsbuildinfo",
         ],
         capture_output=True,
         text=True,
