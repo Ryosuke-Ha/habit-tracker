@@ -1,5 +1,5 @@
 import datetime
-from typing import List
+from typing import List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -41,6 +41,10 @@ class SubTaskCreate(BaseModel):
 
 class SubTaskUpdate(BaseModel):
     title: str
+
+
+class SubTaskOrderUpdate(BaseModel):
+    direction: Literal["up", "down"]
 
 
 @router.get("", response_model=List[SubTaskOut])
@@ -92,6 +96,45 @@ def update_subtask(
     db.commit()
     db.refresh(subtask)
     return subtask
+
+
+@router.put("/{subtask_id}/order", response_model=List[SubTaskOut])
+def update_subtask_order(
+    subtask_id: int,
+    body: SubTaskOrderUpdate,
+    db: Session = Depends(get_db),
+) -> List[models.SubTask]:
+    """サブタスクの順序を上下に1つ移動し、更新後のリストを返す"""
+    subtask = db.query(models.SubTask).filter_by(id=subtask_id).first()
+    if not subtask:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    siblings = (
+        db.query(models.SubTask)
+        .filter_by(todo_type=subtask.todo_type, todo_id=subtask.todo_id)
+        .order_by(models.SubTask.order, models.SubTask.created_at)
+        .all()
+    )
+
+    idx = next((i for i, s in enumerate(siblings) if s.id == subtask_id), None)
+    if idx is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if body.direction == "up" and idx > 0:
+        siblings[idx].order, siblings[idx - 1].order = (
+            siblings[idx - 1].order,
+            siblings[idx].order,
+        )
+    elif body.direction == "down" and idx < len(siblings) - 1:
+        siblings[idx].order, siblings[idx + 1].order = (
+            siblings[idx + 1].order,
+            siblings[idx].order,
+        )
+
+    db.commit()
+
+    siblings.sort(key=lambda s: (s.order, s.created_at))
+    return siblings
 
 
 @router.post("/{subtask_id}/toggle", response_model=SubTaskOut)
