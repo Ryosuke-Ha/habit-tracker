@@ -89,7 +89,6 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingSubtaskId, setEditingSubtaskId] = useState<number | null>(null);
   const [editingSubtaskValue, setEditingSubtaskValue] = useState("");
-  const subtaskConfirmingRef = useRef(false);
 
   // --- 完了アニメーション用 state ---
   // "idle" | "completing" | "done"
@@ -177,18 +176,14 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
   }
 
   async function handleSubtaskEditConfirm(subtaskId: number) {
-    if (subtaskConfirmingRef.current) return;
-    subtaskConfirmingRef.current = true;
     const newTitle = editingSubtaskValue.trim();
     if (!newTitle) {
       setEditingSubtaskId(null);
-      subtaskConfirmingRef.current = false;
       return;
     }
     const originalTitle = subtasks.find((s) => s.id === subtaskId)?.title ?? "";
     setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? { ...s, title: newTitle } : s)));
     setEditingSubtaskId(null);
-    subtaskConfirmingRef.current = false;
     try {
       await apiFetch(`/subtasks/${subtaskId}`, {
         method: "PUT",
@@ -202,7 +197,6 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
   function handleSubtaskEditCancel() {
     setEditingSubtaskId(null);
     setEditingSubtaskValue("");
-    subtaskConfirmingRef.current = false;
   }
 
   async function handleEditSave() {
@@ -468,10 +462,10 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
                             onKeyDown={(e) => {
                               e.stopPropagation();
                               if (e.nativeEvent.isComposing) return;
-                              if (e.key === "Enter") { e.preventDefault(); handleSubtaskEditConfirm(s.id); }
+                              if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
                               if (e.key === "Escape") { e.preventDefault(); handleSubtaskEditCancel(); }
                             }}
-                            className="flex-1 text-xs bg-transparent border-b border-indigo-400 focus:outline-none text-gray-700 py-0.5"
+                            className="flex-1 text-base bg-transparent border-b border-indigo-400 focus:outline-none text-gray-700 py-0.5"
                           />
                         ) : (
                           <span
