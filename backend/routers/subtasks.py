@@ -98,13 +98,13 @@ def update_subtask(
     return subtask
 
 
-@router.put("/{subtask_id}/order")
+@router.put("/{subtask_id}/order", response_model=List[SubTaskOut])
 def update_subtask_order(
     subtask_id: int,
     body: SubTaskOrderUpdate,
     db: Session = Depends(get_db),
-) -> dict:
-    """サブタスクの順序を上下に1つ移動する"""
+) -> List[models.SubTask]:
+    """サブタスクの順序を上下に1つ移動し、更新後のリストを返す"""
     subtask = db.query(models.SubTask).filter_by(id=subtask_id).first()
     if not subtask:
         raise HTTPException(status_code=404, detail="Not found")
@@ -132,7 +132,13 @@ def update_subtask_order(
         )
 
     db.commit()
-    return {"ok": True}
+
+    return (
+        db.query(models.SubTask)
+        .filter_by(todo_type=subtask.todo_type, todo_id=subtask.todo_id)
+        .order_by(models.SubTask.order, models.SubTask.created_at)
+        .all()
+    )
 
 
 @router.post("/{subtask_id}/toggle", response_model=SubTaskOut)

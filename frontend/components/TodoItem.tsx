@@ -186,10 +186,12 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
     }
     setSubtasks(next);
     try {
-      await apiFetch(`/subtasks/${subtaskId}/order`, {
+      const res = await apiFetch(`/subtasks/${subtaskId}/order`, {
         method: "PUT",
         body: JSON.stringify({ direction }),
       });
+      const updated: SubTask[] = await res.json();
+      setSubtasks(updated);
     } catch {
       setSubtasks(snapshot);
     }
