@@ -133,12 +133,8 @@ def update_subtask_order(
 
     db.commit()
 
-    return (
-        db.query(models.SubTask)
-        .filter_by(todo_type=subtask.todo_type, todo_id=subtask.todo_id)
-        .order_by(models.SubTask.order, models.SubTask.created_at)
-        .all()
-    )
+    siblings.sort(key=lambda s: (s.order, s.created_at))
+    return siblings
 
 
 @router.post("/{subtask_id}/toggle", response_model=SubTaskOut)
