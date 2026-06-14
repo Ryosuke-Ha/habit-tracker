@@ -175,6 +175,26 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
     setSubtasks((prev) => prev.filter((s) => s.id !== id));
   }
 
+  async function handleSubtaskOrder(subtaskId: number, direction: "up" | "down") {
+    const snapshot = [...subtasks];
+    const idx = snapshot.findIndex((s) => s.id === subtaskId);
+    const next = [...snapshot];
+    if (direction === "up" && idx > 0) {
+      [next[idx], next[idx - 1]] = [next[idx - 1], next[idx]];
+    } else if (direction === "down" && idx < next.length - 1) {
+      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+    }
+    setSubtasks(next);
+    try {
+      await apiFetch(`/subtasks/${subtaskId}/order`, {
+        method: "PUT",
+        body: JSON.stringify({ direction }),
+      });
+    } catch {
+      setSubtasks(snapshot);
+    }
+  }
+
   async function handleSubtaskEditConfirm(subtaskId: number) {
     const newTitle = editingSubtaskValue.trim();
     if (!newTitle) {
@@ -437,7 +457,7 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
               {totalCount > 0 && (
                 <>
                   <ul className="mt-3 space-y-2">
-                    {subtasks.map((s) => (
+                    {subtasks.map((s, index) => (
                       <li key={s.id} className="flex items-center gap-2 group">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleToggleSubtask(s.id); }}
@@ -475,6 +495,28 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
                             {s.title}
                           </span>
                         )}
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSubtaskOrder(s.id, "up"); }}
+                            disabled={index === 0}
+                            className="w-4 h-3 flex items-center justify-center text-gray-300 hover:text-indigo-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors leading-none"
+                            aria-label="上に移動"
+                          >
+                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSubtaskOrder(s.id, "down"); }}
+                            disabled={index === subtasks.length - 1}
+                            className="w-4 h-3 flex items-center justify-center text-gray-300 hover:text-indigo-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors leading-none"
+                            aria-label="下に移動"
+                          >
+                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteSubtask(s.id); }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity w-4 h-4 flex items-center justify-center text-gray-300 hover:text-red-400"
