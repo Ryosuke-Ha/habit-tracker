@@ -87,6 +87,8 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
   const [subtasksLoaded, setSubtasksLoaded] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<number | null>(null);
+  const [editingSubtaskValue, setEditingSubtaskValue] = useState("");
 
   // --- 完了アニメーション用 state ---
   // "idle" | "completing" | "done"
@@ -171,6 +173,30 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
   async function handleDeleteSubtask(id: number) {
     await apiFetch(`/subtasks/${id}`, { method: "DELETE" });
     setSubtasks((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  async function handleSubtaskEditConfirm(subtaskId: number) {
+    const newTitle = editingSubtaskValue.trim();
+    if (!newTitle) {
+      setEditingSubtaskId(null);
+      return;
+    }
+    const originalTitle = subtasks.find((s) => s.id === subtaskId)?.title ?? "";
+    setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? { ...s, title: newTitle } : s)));
+    setEditingSubtaskId(null);
+    try {
+      await apiFetch(`/subtasks/${subtaskId}`, {
+        method: "PUT",
+        body: JSON.stringify({ title: newTitle }),
+      });
+    } catch {
+      setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? { ...s, title: originalTitle } : s)));
+    }
+  }
+
+  function handleSubtaskEditCancel() {
+    setEditingSubtaskId(null);
+    setEditingSubtaskValue("");
   }
 
   async function handleEditSave() {
@@ -425,9 +451,30 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
                             </svg>
                           )}
                         </button>
-                        <span className={`flex-1 text-xs ${s.is_completed ? "line-through text-gray-300" : "text-gray-700"}`}>
-                          {s.title}
-                        </span>
+                        {editingSubtaskId === s.id ? (
+                          <input
+                            type="text"
+                            value={editingSubtaskValue}
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setEditingSubtaskValue(e.target.value)}
+                            onBlur={() => handleSubtaskEditConfirm(s.id)}
+                            onKeyDown={(e) => {
+                              e.stopPropagation();
+                              if (e.nativeEvent.isComposing) return;
+                              if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+                              if (e.key === "Escape") { e.preventDefault(); handleSubtaskEditCancel(); }
+                            }}
+                            className="flex-1 text-base bg-transparent border-b border-indigo-400 focus:outline-none text-gray-700 py-0.5"
+                          />
+                        ) : (
+                          <span
+                            className={`flex-1 text-xs ${s.is_completed ? "line-through text-gray-300" : "text-gray-700 hover:text-indigo-600 cursor-pointer"}`}
+                            onClick={(e) => { e.stopPropagation(); if (!s.is_completed) { setEditingSubtaskId(s.id); setEditingSubtaskValue(s.title); } }}
+                          >
+                            {s.title}
+                          </span>
+                        )}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteSubtask(s.id); }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity w-4 h-4 flex items-center justify-center text-gray-300 hover:text-red-400"
