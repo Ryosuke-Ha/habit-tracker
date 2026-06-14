@@ -461,7 +461,7 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
                   value={newSubtaskTitle}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                  onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); } }}
+                  onKeyDown={(e) => { e.stopPropagation(); if (e.nativeEvent.isComposing) return; if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); } }}
                   placeholder="サブタスクを追加"
                   className="flex-1 text-xs border-b border-gray-200 py-1.5 focus:outline-none focus:border-indigo-400 bg-transparent text-gray-700 placeholder-gray-300"
                 />
