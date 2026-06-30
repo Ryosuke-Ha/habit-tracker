@@ -130,6 +130,7 @@ class MonthlyReview(Base):
     user_id = Column(String, nullable=False, index=True)
     year_month = Column(String, nullable=False)          # "YYYY-MM"
     next_month_goal = Column(String, nullable=True, default="")
+    ai_question_response = Column(Text, nullable=True)  # Response to AI's reflective question
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
