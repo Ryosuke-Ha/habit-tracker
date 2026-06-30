@@ -12,13 +12,30 @@ from services.weekly_stats import (
 
 SYSTEM_PROMPT_TEMPLATE = """あなたはプロのライフコーチです。認知科学コーチングの原則に基づき、以下を厳守してください。
 
+【セッション構造（厳守）】
+このセッションは必ず3ターンで完結させる。
+
+Turn1（1往復目）:
+今週のパターンに気づきを促す問いかけを1つする。
+習慣データ・KPTを参照して具体的に。
+
+Turn2（2往復目）:
+Turn1の回答を1回だけ深掘りする問いかけをする。
+これ以上の深掘りはしない。
+
+Turn3（3往復目・最終）:
+「来週変えることを1つだけ教えてください」という
+コミットを引き出す問いかけをする。
+ユーザーが回答したら、その内容をそのままコミットとして受け取り
+セッションを完了する準備をする。
+
 【絶対に守るルール】
 1. 答え・アドバイス・解決策を与えない
 2. 1回のメッセージで問いかけは必ず1つだけ
 3. ユーザーの言葉をそのまま使って深掘りする
 4. 判断・評価・共感の押しつけをしない
-5. ユーザーの内側にある答えを引き出すことだけに集中する
-6. 習慣データを参照して具体的・パーソナルな問いかけをする
+5. 深掘りは1回まで（Turn2のみ）
+6. Turn3では必ずコミット（来週の行動1つ）を引き出す
 
 【NGフレーズ】
 「〇〇した方がいいと思います」
@@ -29,22 +46,21 @@ SYSTEM_PROMPT_TEMPLATE = """あなたはプロのライフコーチです。認�
 【OKフレーズ】
 「今週の達成率が{rate}%でしたね。それについてどう感じていますか？」
 「『ユーザーの言葉』とおっしゃいましたが、もう少し教えてもらえますか？」
-「もしその状況が変わったとしたら、何が違うと思いますか？」
+「来週、1つだけ変えるとしたら何ですか？」
 「それはあなたにとってどんな意味がありますか？」
 
-【セッションの流れ】
-Step1: チェックイン（今週の状態・気持ちを聞く）
-Step2: 習慣データへの気づきを深掘り
-Step3: 課題・障害の探索（Problemを深掘り）
-Step4: 目標・アクションの言語化（Tryを具体化）
-Step5: セッションのまとめ・来週への問いかけ
-
 現在のコンテキスト:
-{context}"""
+{context}
+
+前回のセッションのまとめ:
+{previous_summary}
+
+前回のコミット内容:
+{previous_commit}"""
 
 
-def build_coaching_context(user_id: str, db: Session) -> str:
-    """Gather and pre-process coaching context, returning XML-structured string."""
+def build_coaching_context(user_id: str, db: Session) -> tuple:
+    """Gather and pre-process coaching context, returning (xml_string, prev_commit)."""
     week_period = WeekPeriod.current()
     week_start = week_period.start
 
@@ -99,9 +115,10 @@ def build_coaching_context(user_id: str, db: Session) -> str:
     )
     raw_summary: Optional[str] = prev_session.summary if prev_session else None
     prev_summary: Optional[str] = raw_summary[:300] if raw_summary else None
+    prev_commit: Optional[str] = prev_session.commit_content if prev_session else None
 
     nl = chr(10)
-    return f"""<coaching_context>
+    context_xml = f"""<coaching_context>
   <achievement>
     <this_week_rate>{achievement_rate}%</this_week_rate>
     <vs_last_week>{vs_last_week}</vs_last_week>
@@ -123,14 +140,25 @@ def build_coaching_context(user_id: str, db: Session) -> str:
     {nl.join(f"- {g['title']}" for g in goals_data) or "なし"}
   </active_goals>
   <previous_session>
-    {prev_summary or "なし"}
+    <summary>{prev_summary or "なし"}</summary>
+    <commit>{prev_commit or "なし"}</commit>
   </previous_session>
 </coaching_context>"""
+    return context_xml, prev_commit
 
 
-def build_system_prompt(context: str) -> str:
+def build_system_prompt(
+    context: str,
+    previous_summary: str = "なし",
+    previous_commit: str = "なし",
+) -> str:
     """Build the full system prompt from XML context string."""
-    return SYSTEM_PROMPT_TEMPLATE.replace("{context}", context)
+    return (
+        SYSTEM_PROMPT_TEMPLATE
+        .replace("{context}", context)
+        .replace("{previous_summary}", previous_summary)
+        .replace("{previous_commit}", previous_commit)
+    )
 
 
 def build_message_context(session, messages: list, max_recent: int = 5) -> tuple:
