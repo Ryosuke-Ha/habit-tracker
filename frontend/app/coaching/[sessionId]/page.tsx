@@ -152,6 +152,8 @@ export default function CoachingSessionPage() {
   const messages = coachingSession.messages;
   const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
   const isCompleted = coachingSession.status === "completed";
+  const userTurnCount = messages.filter((m) => m.role === "user").length;
+  const isFinalTurn = userTurnCount >= 2;
 
   // The latest assistant message shown prominently (if not completed, the last one for input)
   // Past messages = everything except what's shown prominently
@@ -189,12 +191,16 @@ export default function CoachingSessionPage() {
         {!isCompleted && (
           <button
             onClick={handleCompleteSession}
-            disabled={isCompleting || messages.length < 3}
-            className="text-xs px-3 py-1.5 border border-indigo-700 text-indigo-400 rounded-lg hover:bg-indigo-900/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            disabled={isCompleting || userTurnCount < 3}
+            className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              userTurnCount >= 3
+                ? "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500"
+                : "border border-indigo-700 text-indigo-400 hover:bg-indigo-900/50"
+            }`}
           >
             {isCompleting ? (
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
                 まとめ中...
               </span>
             ) : "セッションを完了する"}
@@ -252,9 +258,31 @@ export default function CoachingSessionPage() {
         </div>
       )}
 
+      {/* Turn indicator */}
+      {!isCompleted && (
+        <div className="mb-3 flex items-center gap-2">
+          {[1, 2, 3].map((turn) => (
+            <div
+              key={turn}
+              className={`h-1.5 flex-1 rounded-full transition-colors ${
+                userTurnCount >= turn ? "bg-indigo-500" : "bg-gray-800"
+              }`}
+            />
+          ))}
+          <span className="text-xs text-gray-500 ml-1">
+            {userTurnCount >= 3 ? "完了できます" : `${userTurnCount + 1}/3`}
+          </span>
+        </div>
+      )}
+
       {/* Input area (only for in_progress) */}
       {!isCompleted && (
         <form onSubmit={handleSendMessage} className="mb-8">
+          {isFinalTurn && (
+            <div className="mb-2 text-xs text-amber-400 font-medium">
+              来週変えることを1つ教えてください。その後「セッションを完了する」を押してください。
+            </div>
+          )}
           <textarea
             value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
