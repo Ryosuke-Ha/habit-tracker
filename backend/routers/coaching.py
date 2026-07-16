@@ -109,7 +109,7 @@ def call_claude(system: str, messages: list, max_tokens: int = 500) -> str:
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured")
     client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-sonnet-4-6",
         max_tokens=max_tokens,
         system=system,
         messages=messages,
