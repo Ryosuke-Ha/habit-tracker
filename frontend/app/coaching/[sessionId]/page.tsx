@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
+import HamburgerMenu from "@/components/HamburgerMenu";
 import { apiFetch } from "@/lib/api";
 
 interface CoachingMessage {
@@ -188,24 +189,30 @@ export default function CoachingSessionPage() {
             <p className="text-xs text-gray-500">コーチングセッション</p>
           </div>
         </div>
-        {!isCompleted && (
-          <button
-            onClick={handleCompleteSession}
-            disabled={isCompleting || userTurnCount < 3}
-            className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              userTurnCount >= 3
-                ? "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500"
-                : "border border-indigo-700 text-indigo-400 hover:bg-indigo-900/50"
-            }`}
-          >
-            {isCompleting ? (
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                まとめ中...
-              </span>
-            ) : "セッションを完了する"}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isCompleted && (
+            <button
+              onClick={handleCompleteSession}
+              disabled={isCompleting || userTurnCount < 3}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                userTurnCount >= 3
+                  ? "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500"
+                  : "border border-indigo-700 text-indigo-400 hover:bg-indigo-900/50"
+              }`}
+            >
+              {isCompleting ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                  まとめ中...
+                </span>
+              ) : "セッションを完了する"}
+            </button>
+          )}
+          <HamburgerMenu
+            user={authSession?.user}
+            onSignOut={() => signOut({ callbackUrl: "/login" })}
+          />
+        </div>
       </div>
 
       {/* Context summary (collapsible) */}
