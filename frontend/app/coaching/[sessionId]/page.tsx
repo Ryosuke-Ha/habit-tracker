@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
+import HamburgerMenu from "@/components/HamburgerMenu";
 import { apiFetch } from "@/lib/api";
 
 interface CoachingMessage {
@@ -188,24 +189,37 @@ export default function CoachingSessionPage() {
             <p className="text-xs text-gray-500">コーチングセッション</p>
           </div>
         </div>
-        {!isCompleted && (
-          <button
-            onClick={handleCompleteSession}
-            disabled={isCompleting || userTurnCount < 3}
-            className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              userTurnCount >= 3
-                ? "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500"
-                : "border border-indigo-700 text-indigo-400 hover:bg-indigo-900/50"
-            }`}
-          >
-            {isCompleting ? (
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                まとめ中...
-              </span>
-            ) : "セッションを完了する"}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isCompleted && (
+            <button
+              onClick={handleCompleteSession}
+              disabled={isCompleting || userTurnCount < 3}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                userTurnCount >= 3
+                  ? "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500"
+                  : "border border-indigo-700 text-indigo-400 hover:bg-indigo-900/50"
+              }`}
+            >
+              {isCompleting ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                  まとめ中...
+                </span>
+              ) : "セッションを完了する"}
+            </button>
+          )}
+          <HamburgerMenu
+            user={authSession?.user}
+            onSignOut={() => signOut({ callbackUrl: "/login" })}
+            items={[
+              { label: "TODO", onClick: () => router.push("/"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+              { label: "TODOメモ", onClick: () => router.push("/memo"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg> },
+              { label: "コーチング", onClick: () => router.push("/coaching"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> },
+              { label: "週の振り返り", onClick: () => router.push("/review/weekly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
+              { label: "月の振り返り", onClick: () => router.push("/review/monthly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
+            ]}
+          />
+        </div>
       </div>
 
       {/* Context summary (collapsible) */}
