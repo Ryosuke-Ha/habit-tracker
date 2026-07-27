@@ -60,6 +60,15 @@ interface TodoItemProps {
   onConvertToLog?: (data: { title: string; scheduled_time: string; location: string }) => Promise<void>;
 }
 
+function isTimeOverdue(scheduledTime: string | null, done: boolean): boolean {
+  if (!scheduledTime || done) return false;
+  const now = new Date();
+  const [h, m] = scheduledTime.split(":").map(Number);
+  const todoTime = new Date();
+  todoTime.setHours(h, m, 0, 0);
+  return now > todoTime;
+}
+
 // バーストパーティクルの色リスト
 const BURST_COLORS = [
   "bg-green-400",
@@ -326,7 +335,11 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
       onClick={() => setExpanded((v) => !v)}
     >
       {/* Main row */}
-      <div className="flex items-center gap-3 p-4">
+      <div className={`flex items-center gap-3 py-4 pr-4 ${
+        isTimeOverdue(item.scheduledTime, isDone)
+          ? "pl-2 border-l-2 border-l-red-600"
+          : "pl-4"
+      }`}>
         {/* Check button — バーストパーティクル用に relative */}
         <div className="relative flex-shrink-0 w-6 h-6">
           <button
@@ -367,9 +380,17 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className={`text-xs mb-0.5 flex items-center gap-2 flex-wrap ${isDone ? "text-gray-300" : "text-gray-400"}`}>
-            {item.scheduledTime && <span>🕐 {item.scheduledTime}</span>}
-            {item.location && <span>📍 {item.location}</span>}
+          <div className="text-xs mb-0.5 flex items-center gap-2 flex-wrap">
+            {item.scheduledTime && (
+              <span className={
+                isTimeOverdue(item.scheduledTime, isDone)
+                  ? "text-red-400"
+                  : isDone ? "text-gray-300" : "text-gray-400"
+              }>🕐 {item.scheduledTime}</span>
+            )}
+            {item.location && (
+              <span className={isDone ? "text-gray-300" : "text-gray-400"}>📍 {item.location}</span>
+            )}
           </div>
           <p className={`text-sm font-semibold flex items-center gap-1.5 ${isDone ? "text-gray-300 line-through" : "text-gray-900"}`}>
             {item.title}
