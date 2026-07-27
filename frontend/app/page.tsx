@@ -11,6 +11,7 @@ import { useSetting } from "@/hooks/useSetting"
 import { BackendError } from "@/components/BackendError";
 import { apiFetch } from "@/lib/api";
 import { SkeletonTodoPage } from "@/components/Skeleton";
+import { PageLoading } from "@/components/PageLoading";
 import { ValidatingIndicator } from "@/components/ValidatingIndicator";
 import { getFromCache, setToCache, invalidateSWRCachePrefix } from "@/hooks/useStaleWhileRevalidate";
 
@@ -543,16 +544,7 @@ export default function Home() {
     status === "loading" ||
     (status === "authenticated" && !settingReady)
   ) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p
-          className="text-green-400 text-xs animate-pulse"
-          style={{ fontFamily: "'Press Start 2P', monospace" }}
-        >
-          LOADING...
-        </p>
-      </div>
-    );
+    return <PageLoading />;
   }
 
   // 未認証（useEffectでリダイレクト済み）

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { SkeletonCoachingSessionPage } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api";
 
 interface CoachingMessage {
@@ -139,12 +140,7 @@ export default function CoachingSessionPage() {
   }
 
   if (status === "loading" || loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-gray-500 text-sm">セッションを準備中...</p>
-      </div>
-    );
+    return <SkeletonCoachingSessionPage />;
   }
 
   if (!coachingSession) return null;

@@ -80,3 +80,29 @@ export function SkeletonCoachingPage() {
     </div>
   )
 }
+
+export function SkeletonCoachingSessionPage() {
+  return (
+    <div className="min-h-screen bg-black p-4">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <SkeletonBlock className="w-8 h-8 rounded-lg" />
+          <div>
+            <SkeletonBlock className="w-40 h-4 mb-1" />
+            <SkeletonBlock className="w-24 h-3" />
+          </div>
+        </div>
+        <SkeletonBlock className="w-24 h-8 rounded-lg" />
+      </div>
+      <SkeletonBlock className="w-full h-10 mb-6 rounded-xl" />
+      <SkeletonBlock className="w-full h-36 mb-6 rounded-2xl" />
+      <div className="flex gap-1 mb-4">
+        {[...Array(3)].map((_, i) => (
+          <SkeletonBlock key={i} className="h-1.5 flex-1 rounded-full" />
+        ))}
+      </div>
+      <SkeletonBlock className="w-full h-28 mb-3 rounded-xl" />
+      <SkeletonBlock className="w-full h-12 rounded-xl" />
+    </div>
+  )
+}
