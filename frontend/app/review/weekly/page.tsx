@@ -569,7 +569,8 @@ export default function WeeklyReviewPage() {
                   value={newContent}
                   onChange={(e) => setNewContent(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") e.preventDefault();
+                    if (e.nativeEvent.isComposing) return;
+                    if (e.key === "Enter") { e.preventDefault(); handleAdd(); }
                     if (e.key === "Escape") { setAddingType(null); setNewContent(""); }
                   }}
                   onBlur={() => window.scrollTo(0, 0)}
