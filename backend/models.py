@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -130,6 +130,7 @@ class MonthlyReview(Base):
     user_id = Column(String, nullable=False, index=True)
     year_month = Column(String, nullable=False)          # "YYYY-MM"
     next_month_goal = Column(String, nullable=True, default="")
+    ai_question_response = Column(Text, nullable=True)  # Response to AI's reflective question
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -230,12 +231,13 @@ class CoachingSession(Base):
     status = Column(String, nullable=False, default="in_progress")  # "in_progress" | "completed"
     context = Column(String, nullable=True)  # JSON string
     summary = Column(String, nullable=True)  # Generated on completion; used as context for next session
+    commit_content = Column(Text, nullable=True)  # User's commitment from Turn3
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     messages = relationship("CoachingMessage", back_populates="session", cascade="all, delete-orphan", order_by="CoachingMessage.created_at")
 
-    def complete(self, summary: str) -> None:
+    def complete(self, summary: str, commit_content: str = None) -> None:
         """
         セッションを完了させる。
         既に完了済みの場合はInvalidStateTransitionErrorを発生させる。
@@ -250,6 +252,7 @@ class CoachingSession(Base):
             )
         self.status = SessionStatus.COMPLETED
         self.summary = summary
+        self.commit_content = commit_content
 
     def add_message(self, role: str, content: str) -> "CoachingMessage":
         """

@@ -306,33 +306,6 @@ export default function WeeklyReviewPage() {
         <HamburgerMenu
           user={session?.user}
           onSignOut={() => signOut({ callbackUrl: "/login" })}
-          items={[
-            {
-              label: "TODO",
-              onClick: () => router.push("/"),
-              icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
-            },
-            {
-              label: "TODOメモ",
-              onClick: () => router.push("/memo"),
-              icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
-            },
-            {
-              label: "コーチング",
-              onClick: () => router.push("/coaching"),
-              icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
-            },
-            {
-              label: "テンプレートを管理",
-              onClick: () => router.push("/templates"),
-              icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg>,
-            },
-            {
-              label: "月の振り返り",
-              onClick: () => router.push("/review/monthly"),
-              icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-            },
-          ]}
         />
       </div>
 
@@ -569,7 +542,8 @@ export default function WeeklyReviewPage() {
                   value={newContent}
                   onChange={(e) => setNewContent(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") e.preventDefault();
+                    if (e.nativeEvent.isComposing) return;
+                    if (e.key === "Enter") { e.preventDefault(); handleAdd(); }
                     if (e.key === "Escape") { setAddingType(null); setNewContent(""); }
                   }}
                   onBlur={() => window.scrollTo(0, 0)}
@@ -597,6 +571,21 @@ export default function WeeklyReviewPage() {
           </div>
         );
       })}
+
+      {/* コーチングへの遷移 */}
+      {isCurrentWeek && (
+        <div className="mt-4">
+          <button
+            onClick={() => router.push("/coaching")}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            AIコーチングを始める
+          </button>
+        </div>
+      )}
 
       {/* AI分析セクション */}
       <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">

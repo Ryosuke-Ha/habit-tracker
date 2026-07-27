@@ -60,6 +60,7 @@ class MonthlyReviewOut(BaseModel):
     user_id: str
     year_month: str
     next_month_goal: Optional[str]
+    ai_question_response: Optional[str]
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -82,7 +83,8 @@ class MonthlyReviewSummaryOut(BaseModel):
 
 
 class MonthlyReviewUpdate(BaseModel):
-    next_month_goal: str
+    next_month_goal: Optional[str] = None
+    ai_question_response: Optional[str] = None
 
 
 class DailyRate(BaseModel):
@@ -326,7 +328,10 @@ def update_monthly_review(
     )
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
-    review.next_month_goal = body.next_month_goal
+    if body.next_month_goal is not None:
+        review.next_month_goal = body.next_month_goal
+    if body.ai_question_response is not None:
+        review.ai_question_response = body.ai_question_response
     db.commit()
     db.refresh(review)
     invalidate_cache_prefix("monthly_stats_")
