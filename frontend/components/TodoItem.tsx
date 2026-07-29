@@ -2,6 +2,23 @@
 
 import { useState, useRef, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 function generateTimeOptions(): string[] {
   const times: string[] = [];
@@ -67,6 +84,114 @@ function isTimeOverdue(scheduledTime: string | null, done: boolean): boolean {
   const todoTime = new Date();
   todoTime.setHours(h, m, 0, 0);
   return now > todoTime;
+}
+
+interface SortableSubtaskItemProps {
+  subtask: SubTask;
+  editingSubtaskId: number | null;
+  editingSubtaskValue: string;
+  onToggle: (id: number) => void;
+  onDelete: (id: number) => void;
+  onEditStart: (id: number, title: string) => void;
+  onEditChange: (value: string) => void;
+  onEditConfirm: (id: number) => void;
+  onEditCancel: () => void;
+}
+
+function SortableSubtaskItem({
+  subtask,
+  editingSubtaskId,
+  editingSubtaskValue,
+  onToggle,
+  onDelete,
+  onEditStart,
+  onEditChange,
+  onEditConfirm,
+  onEditCancel,
+}: SortableSubtaskItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: subtask.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <li ref={setNodeRef} style={style} className="flex items-center gap-2 group">
+      {/* Drag handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+        className="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none"
+        aria-label="ドラッグして並び替え"
+      >
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+          <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+          <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+          <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+        </svg>
+      </button>
+
+      {/* Checkbox */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggle(subtask.id); }}
+        className={`w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${
+          subtask.is_completed ? "bg-green-500 border-green-500 text-white" : "border-gray-300 hover:border-gray-500"
+        }`}
+      >
+        {subtask.is_completed && (
+          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </button>
+
+      {/* Title */}
+      {editingSubtaskId === subtask.id ? (
+        <input
+          type="text"
+          value={editingSubtaskValue}
+          autoFocus
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => onEditChange(e.target.value)}
+          onBlur={() => onEditConfirm(subtask.id)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+            if (e.key === "Escape") { e.preventDefault(); onEditCancel(); }
+          }}
+          className="flex-1 text-base bg-transparent border-b border-indigo-400 focus:outline-none text-gray-700 py-0.5"
+        />
+      ) : (
+        <span
+          className={`flex-1 text-xs ${subtask.is_completed ? "line-through text-gray-300" : "text-gray-700 hover:text-indigo-600 cursor-pointer"}`}
+          onClick={(e) => { e.stopPropagation(); if (!subtask.is_completed) { onEditStart(subtask.id, subtask.title); } }}
+        >
+          {subtask.title}
+        </span>
+      )}
+
+      {/* Delete button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(subtask.id); }}
+        className="opacity-0 group-hover:opacity-100 transition-opacity w-4 h-4 flex items-center justify-center text-gray-300 hover:text-red-400"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </li>
+  );
 }
 
 // バーストパーティクルの色リスト
@@ -184,23 +309,30 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
     setSubtasks((prev) => prev.filter((s) => s.id !== id));
   }
 
-  async function handleSubtaskOrder(subtaskId: number, direction: "up" | "down") {
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = subtasks.findIndex((s) => s.id === active.id);
+    const newIndex = subtasks.findIndex((s) => s.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
     const snapshot = [...subtasks];
-    const idx = snapshot.findIndex((s) => s.id === subtaskId);
-    const next = [...snapshot];
-    if (direction === "up" && idx > 0) {
-      [next[idx], next[idx - 1]] = [next[idx - 1], next[idx]];
-    } else if (direction === "down" && idx < next.length - 1) {
-      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-    }
-    setSubtasks(next);
+    setSubtasks(arrayMove(subtasks, oldIndex, newIndex));
+
     try {
-      const res = await apiFetch(`/subtasks/${subtaskId}/order`, {
+      const direction = newIndex < oldIndex ? "up" : "down";
+      await apiFetch(`/subtasks/${active.id}/order`, {
         method: "PUT",
         body: JSON.stringify({ direction }),
       });
-      const updated: SubTask[] = await res.json();
-      setSubtasks(updated);
     } catch {
       setSubtasks(snapshot);
     }
@@ -479,78 +611,33 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
             <>
               {totalCount > 0 && (
                 <>
-                  <ul className="mt-3 space-y-2">
-                    {subtasks.map((s, index) => (
-                      <li key={s.id} className="flex items-center gap-2 group">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleToggleSubtask(s.id); }}
-                          className={`w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${
-                            s.is_completed ? "bg-green-500 border-green-500 text-white" : "border-gray-300 hover:border-gray-500"
-                          }`}
-                        >
-                          {s.is_completed && (
-                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </button>
-                        {editingSubtaskId === s.id ? (
-                          <input
-                            type="text"
-                            value={editingSubtaskValue}
-                            autoFocus
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => setEditingSubtaskValue(e.target.value)}
-                            onBlur={() => handleSubtaskEditConfirm(s.id)}
-                            onKeyDown={(e) => {
-                              e.stopPropagation();
-                              if (e.nativeEvent.isComposing) return;
-                              if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
-                              if (e.key === "Escape") { e.preventDefault(); handleSubtaskEditCancel(); }
-                            }}
-                            className="flex-1 text-base bg-transparent border-b border-indigo-400 focus:outline-none text-gray-700 py-0.5"
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={subtasks.map((s) => s.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <ul className="mt-3 space-y-2">
+                        {subtasks.map((s) => (
+                          <SortableSubtaskItem
+                            key={s.id}
+                            subtask={s}
+                            editingSubtaskId={editingSubtaskId}
+                            editingSubtaskValue={editingSubtaskValue}
+                            onToggle={handleToggleSubtask}
+                            onDelete={handleDeleteSubtask}
+                            onEditStart={(id, title) => { setEditingSubtaskId(id); setEditingSubtaskValue(title); }}
+                            onEditChange={setEditingSubtaskValue}
+                            onEditConfirm={handleSubtaskEditConfirm}
+                            onEditCancel={handleSubtaskEditCancel}
                           />
-                        ) : (
-                          <span
-                            className={`flex-1 text-xs ${s.is_completed ? "line-through text-gray-300" : "text-gray-700 hover:text-indigo-600 cursor-pointer"}`}
-                            onClick={(e) => { e.stopPropagation(); if (!s.is_completed) { setEditingSubtaskId(s.id); setEditingSubtaskValue(s.title); } }}
-                          >
-                            {s.title}
-                          </span>
-                        )}
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleSubtaskOrder(s.id, "up"); }}
-                            disabled={index === 0}
-                            className="w-4 h-3 flex items-center justify-center text-gray-300 hover:text-indigo-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors leading-none"
-                            aria-label="上に移動"
-                          >
-                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleSubtaskOrder(s.id, "down"); }}
-                            disabled={index === subtasks.length - 1}
-                            className="w-4 h-3 flex items-center justify-center text-gray-300 hover:text-indigo-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors leading-none"
-                            aria-label="下に移動"
-                          >
-                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-                        </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteSubtask(s.id); }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity w-4 h-4 flex items-center justify-center text-gray-300 hover:text-red-400"
-                        >
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                        ))}
+                      </ul>
+                    </SortableContext>
+                  </DndContext>
                   {/* Progress bar (expanded) */}
                   <div className="mt-3 mb-3">
                     <div className="flex justify-between text-xs text-gray-400 mb-1">
