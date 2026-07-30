@@ -22,6 +22,7 @@ interface MonthlyReview {
   id: number;
   year_month: string;
   next_month_goal: string | null;
+  ai_question_response: string | null;
 }
 
 interface DailyRate {
@@ -103,6 +104,10 @@ export default function MonthlyReviewPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiCreatedAt, setAiCreatedAt] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [questionResponse, setQuestionResponse] = useState("");
+  const [nextMonthGoal, setNextMonthGoal] = useState("");
+  const [savingResponse, setSavingResponse] = useState(false);
+  const [responseSaved, setResponseSaved] = useState(false);
 
   const todayYM = getCurrentYearMonth();
   const isPast = currentYM < todayYM;
@@ -121,6 +126,7 @@ export default function MonthlyReviewPage() {
   async function loadData() {
     setLoading(true);
     setSaved(false);
+    setResponseSaved(false);
     setAiAnalysis(null);
     setAiCreatedAt(null);
     const email = session!.user!.email!;
@@ -134,6 +140,8 @@ export default function MonthlyReviewPage() {
       const reviewData: MonthlyReview = await reviewRes.json();
       setReview(reviewData);
       setGoal(reviewData.next_month_goal ?? "");
+      setNextMonthGoal(reviewData.next_month_goal ?? "");
+      setQuestionResponse(reviewData.ai_question_response ?? "");
 
       if (statsRes.ok) {
         const statsData: MonthlyStats = await statsRes.json();
@@ -186,8 +194,36 @@ export default function MonthlyReviewPage() {
     saveTimerRef.current = setTimeout(() => setSaved(false), 2000);
   }
 
+  async function saveMonthlyResponse() {
+    if (!review || savingResponse) return;
+    setSavingResponse(true);
+    try {
+      const email = session!.user!.email!;
+      const res = await apiFetch(`/reviews/monthly/${review.id}`, {
+        method: "PUT",
+        headers: { "X-User-Email": email },
+        body: JSON.stringify({
+          ai_question_response: questionResponse,
+          next_month_goal: nextMonthGoal,
+        }),
+      });
+      const updated: MonthlyReview = await res.json();
+      setReview(updated);
+      setGoal(updated.next_month_goal ?? "");
+      setResponseSaved(true);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => setResponseSaved(false), 2000);
+    } finally {
+      setSavingResponse(false);
+    }
+  }
+
   const overallPct = stats ? Math.round(stats.overall_rate * 100) : null;
   const hasStats = stats !== null && stats.daily_rates.length > 0;
+
+  const today = new Date();
+  const isCompleted = Boolean(review?.ai_question_response || review?.next_month_goal);
+  const showUnfinishedBanner = isCurrent && today.getDate() >= 25 && !isCompleted;
 
   if (status === "loading" || loading) return <SkeletonReviewPage />;
 
@@ -210,14 +246,18 @@ export default function MonthlyReviewPage() {
         <HamburgerMenu
           user={session?.user}
           onSignOut={() => signOut({ callbackUrl: "/login" })}
-          items={[
-            { label: "TODO", onClick: () => router.push("/"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
-            { label: "コーチング", onClick: () => router.push("/coaching"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> },
-            { label: "テンプレートを管理", onClick: () => router.push("/templates"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg> },
-            { label: "週の振り返り", onClick: () => router.push("/review/weekly"), icon: <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
-          ]}
         />
       </div>
+
+      {/* 未実施バナー */}
+      {showUnfinishedBanner && (
+        <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-300 rounded-xl">
+          <span className="text-amber-500 text-sm">⚠️</span>
+          <p className="text-xs text-amber-700 font-medium">
+            今月の振り返りがまだ完了していません。月末までに振り返りを行いましょう。
+          </p>
+        </div>
+      )}
 
       {/* 月ナビゲーション */}
       <div className="flex items-center justify-between mb-6">
@@ -376,31 +416,75 @@ export default function MonthlyReviewPage() {
         )}
       </div>
 
-      {/* ---- セクション2: 来月の目標 ---- */}
-      <div className="p-4 bg-white border border-gray-200 rounded-xl">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-700">🎯 来月の目標</h2>
+      {/* ---- セクション2: 問いかけへの回答と来月の目標 ---- */}
+      {aiAnalysis ? (
+        <div className="p-4 bg-white border border-gray-200 rounded-xl">
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">🎯 来月の行動を決める</h2>
+
+          <div className="text-xs text-indigo-600 font-medium mb-1">
+            AIからの問いかけへの回答
+          </div>
+          <textarea
+            value={questionResponse}
+            onChange={(e) => setQuestionResponse(e.target.value)}
+            placeholder="なぜそうなったと思いますか？"
+            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-800 placeholder-gray-300"
+            rows={3}
+            style={{ fontSize: "16px" }}
+          />
+
+          <div className="text-xs text-gray-500 mt-4 mb-1 font-medium">
+            来月試すことを1つ決めてください
+          </div>
+          <input
+            type="text"
+            value={nextMonthGoal}
+            onChange={(e) => setNextMonthGoal(e.target.value)}
+            placeholder="例: 朝の習慣を1つ増やす"
+            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-800 placeholder-gray-300"
+            style={{ fontSize: "16px" }}
+          />
+
+          <div className="flex items-center justify-end gap-3 mt-3">
+            {responseSaved && (
+              <span className="text-xs text-emerald-500">保存しました ✓</span>
+            )}
+            <button
+              onClick={saveMonthlyResponse}
+              disabled={savingResponse}
+              className="px-4 py-1.5 text-sm bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+            >
+              {savingResponse ? "保存中…" : "保存する"}
+            </button>
+          </div>
         </div>
-        <textarea
-          value={goal}
-          onChange={(e) => { setGoal(e.target.value); setSaved(false); }}
-          placeholder="来月取り組みたいことを書いてください…"
-          className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-800 placeholder-gray-300"
-          rows={4}
-        />
-        <div className="flex items-center justify-end gap-3 mt-2">
-          {saved && (
-            <span className="text-xs text-emerald-500">保存しました ✓</span>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-1.5 text-sm bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 transition-colors"
-          >
-            {saving ? "保存中…" : "保存する"}
-          </button>
+      ) : (
+        <div className="p-4 bg-white border border-gray-200 rounded-xl">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-700">🎯 来月の目標</h2>
+          </div>
+          <textarea
+            value={goal}
+            onChange={(e) => { setGoal(e.target.value); setSaved(false); }}
+            placeholder="来月取り組みたいことを書いてください…"
+            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-800 placeholder-gray-300"
+            rows={4}
+            style={{ fontSize: "16px" }}
+          />
+          <div className="flex items-center justify-end gap-3 mt-2">
+            {saved && (
+              <span className="text-xs text-emerald-500">保存しました ✓</span>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-1.5 text-sm bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+            >
+              {saving ? "保存中…" : "保存する"}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </main>
   );
 }

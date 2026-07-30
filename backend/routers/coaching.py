@@ -109,7 +109,7 @@ def call_claude(system: str, messages: list, max_tokens: int = 500) -> str:
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured")
     client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-sonnet-4-6",
         max_tokens=max_tokens,
         system=system,
         messages=messages,
@@ -189,6 +189,8 @@ def create_session(
             for i in prev_review.kpt_items if i.type == "try"
         ][:3]
 
+    context_xml, prev_commit = build_coaching_context(user_email, db)
+
     prev_completed = (
         db.query(models.CoachingSession)
         .filter_by(user_id=user_email, status=SessionStatus.COMPLETED)
@@ -196,8 +198,8 @@ def create_session(
         .first()
     )
     has_prev_summary = bool(prev_completed and prev_completed.summary)
-
-    context_xml = build_coaching_context(user_email, db)
+    prev_summary_text = prev_completed.summary if prev_completed else None
+    prev_commit_text = prev_completed.commit_content if prev_completed else None
 
     session = models.CoachingSession(
         user_id=user_email,
@@ -208,17 +210,27 @@ def create_session(
     db.add(session)
     db.flush()
 
-    system = build_system_prompt(context_xml)
+    system = build_system_prompt(
+        context_xml,
+        previous_summary=prev_summary_text or "なし",
+        previous_commit=prev_commit_text or "なし",
+    )
 
-    if has_prev_summary:
-        first_prompt = "新しいコーチングセッションを開始してください。前回のセッションを踏まえて、今週のチェックインの問いかけを1つ生成してください。"
+    if prev_commit_text:
+        first_prompt = (
+            f"新しいコーチングセッションを開始してください（Turn1）。"
+            f"前回「{prev_commit_text}」と決めていましたね。今週はどうでしたか？"
+            f"という問いかけで始めてください。"
+        )
+    elif has_prev_summary:
+        first_prompt = "新しいコーチングセッションを開始してください（Turn1）。前回のセッションを踏まえて、今週のパターンへの気づきを促す問いかけを1つ生成してください。"
     elif prev_try:
         first_try = prev_try[0]["content"]
-        first_prompt = f"新しいコーチングセッションを開始してください。先週「{first_try}」というTryを設定していたことを踏まえて、チェックインの問いかけを1つ生成してください。"
+        first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。先週「{first_try}」というTryを設定していたことを踏まえて、今週のパターンへの気づきを促す問いかけを1つ生成してください。"
     elif rate >= 70:
-        first_prompt = f"新しいコーチングセッションを開始してください。今週の習慣達成率は{rate}%でした。この結果を踏まえたチェックインの問いかけを1つ生成してください。"
+        first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。今週の習慣達成率は{rate}%でした。今週のパターンへの気づきを促す問いかけを1つ生成してください。"
     else:
-        first_prompt = f"新しいコーチングセッションを開始してください。今週の習慣達成率は{rate}%でした。今の気持ちへのチェックインの問いかけを1つ生成してください。"
+        first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。今週の習慣達成率は{rate}%でした。今週のパターンへの気づきを促す問いかけを1つ生成してください。"
 
     first_content = call_claude(system, [{"role": "user", "content": first_prompt}])
 
@@ -291,13 +303,20 @@ def complete_session(
 
     system = build_system_prompt(session.context or "")
 
+    # Extract last user message as commit_content (Turn3 response)
+    last_user_msg = next(
+        (m for m in reversed(all_msgs) if m.role == "user"),
+        None,
+    )
+    commit_content = last_user_msg.content if last_user_msg else None
+
     summary_prompt = """セッションが完了しました。以下の形式でまとめを作成してください:
 
 【今日の気づき】
 （セッションで出てきた気づきを箇条書き）
 
-【宣言したこと】
-（セッションで出てきたアクション・目標）
+【来週のコミット】
+（ユーザーが宣言した来週変えること1つ）
 
 【来週への問い】
 （来週のセッションまでに考えておく問いかけを1つ）"""
@@ -312,7 +331,7 @@ def complete_session(
     )
     db.add(summary_msg)
     try:
-        session.complete(summary_content)
+        session.complete(summary_content, commit_content)
     except InvalidStateTransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
     db.commit()

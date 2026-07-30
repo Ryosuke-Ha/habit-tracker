@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { SkeletonCoachingSessionPage } from "@/components/Skeleton";
+import { useSession, signOut } from "next-auth/react";
+import HamburgerMenu from "@/components/HamburgerMenu";
 import { apiFetch } from "@/lib/api";
 
 interface CoachingMessage {
@@ -148,6 +149,8 @@ export default function CoachingSessionPage() {
   const messages = coachingSession.messages;
   const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
   const isCompleted = coachingSession.status === "completed";
+  const userTurnCount = messages.filter((m) => m.role === "user").length;
+  const isFinalTurn = userTurnCount >= 2;
 
   // The latest assistant message shown prominently (if not completed, the last one for input)
   // Past messages = everything except what's shown prominently
@@ -182,20 +185,30 @@ export default function CoachingSessionPage() {
             <p className="text-xs text-gray-500">コーチングセッション</p>
           </div>
         </div>
-        {!isCompleted && (
-          <button
-            onClick={handleCompleteSession}
-            disabled={isCompleting || messages.length < 3}
-            className="text-xs px-3 py-1.5 border border-gray-700 text-gray-400 rounded-lg hover:border-gray-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {isCompleting ? (
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-                まとめ中...
-              </span>
-            ) : "セッションを完了する"}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isCompleted && (
+            <button
+              onClick={handleCompleteSession}
+              disabled={isCompleting || userTurnCount < 3}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                userTurnCount >= 3
+                  ? "bg-white hover:bg-gray-200 text-black"
+                  : "border border-gray-700 text-gray-400 hover:border-gray-500"
+              }`}
+            >
+              {isCompleting ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                  まとめ中...
+                </span>
+              ) : "セッションを完了する"}
+            </button>
+          )}
+          <HamburgerMenu
+            user={authSession?.user}
+            onSignOut={() => signOut({ callbackUrl: "/login" })}
+          />
+        </div>
       </div>
 
       {/* Context summary (collapsible) */}
@@ -248,9 +261,31 @@ export default function CoachingSessionPage() {
         </div>
       )}
 
+      {/* Turn indicator */}
+      {!isCompleted && (
+        <div className="mb-3 flex items-center gap-2">
+          {[1, 2, 3].map((turn) => (
+            <div
+              key={turn}
+              className={`h-1.5 flex-1 rounded-full transition-colors ${
+                userTurnCount >= turn ? "bg-white" : "bg-gray-800"
+              }`}
+            />
+          ))}
+          <span className="text-xs text-gray-500 ml-1">
+            {userTurnCount >= 3 ? "完了できます" : `${userTurnCount + 1}/3`}
+          </span>
+        </div>
+      )}
+
       {/* Input area (only for in_progress) */}
       {!isCompleted && (
         <form onSubmit={handleSendMessage} className="mb-8">
+          {isFinalTurn && (
+            <div className="mb-2 text-xs text-amber-400 font-medium">
+              来週変えることを1つ教えてください。その後「セッションを完了する」を押してください。
+            </div>
+          )}
           <textarea
             value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
