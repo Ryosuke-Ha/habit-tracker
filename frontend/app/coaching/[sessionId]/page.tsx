@@ -192,8 +192,8 @@ export default function CoachingSessionPage() {
               disabled={isCompleting || userTurnCount < 3}
               className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                 userTurnCount >= 3
-                  ? "bg-indigo-600 hover:bg-indigo-500 text-white"
-                  : "border border-indigo-300 text-indigo-400 hover:border-indigo-400"
+                  ? "bg-gray-900 hover:bg-gray-700 text-white"
+                  : "border border-gray-200 text-gray-400 hover:border-gray-400"
               }`}
             >
               {isCompleting ? (
@@ -216,7 +216,7 @@ export default function CoachingSessionPage() {
         <div className="mb-6">
           <button
             onClick={() => setContextOpen((v) => !v)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-500 hover:border-gray-400 transition-colors"
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-gray-200 text-xs text-gray-500 hover:border-gray-400 transition-colors"
           >
             <span>今週のデータ（達成率 {contextData.achievement_rate}%）</span>
             <svg className={`w-4 h-4 transition-transform ${contextOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -224,7 +224,7 @@ export default function CoachingSessionPage() {
             </svg>
           </button>
           {contextOpen && (
-            <div className="mt-2 px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-600 space-y-1">
+            <div className="mt-2 px-4 py-3 rounded-lg bg-white border border-gray-200 text-xs text-gray-600 space-y-1">
               <p>📅 {contextData.week_start} 〜 {contextData.week_end}</p>
               <p>✅ 達成率: <span className="text-gray-900">{contextData.achievement_rate}%</span></p>
               {contextData.kpt.problem.length > 0 && (
@@ -243,17 +243,17 @@ export default function CoachingSessionPage() {
 
       {/* Prominent current question / summary */}
       {prominentMsg && (
-        <div className={`mb-6 rounded-2xl border p-5 ${isCompleted ? "border-green-200 bg-green-50" : "border-indigo-200 bg-indigo-50"}`}>
+        <div className={`mb-6 rounded-lg border p-6 ${isCompleted ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50"}`}>
           {isCompleted && (
             <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">セッションまとめ</p>
           )}
-          <p className="text-gray-900 leading-relaxed whitespace-pre-wrap" style={{ fontSize: "20px" }}>
+          <p className="text-gray-900 leading-relaxed whitespace-pre-wrap text-base">
             {prominentMsg.content}
           </p>
           {isCompleted && (
             <button
               onClick={() => router.push("/coaching")}
-              className="mt-5 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors"
+              className="mt-5 w-full py-3 bg-gray-900 hover:bg-gray-700 text-white font-semibold rounded-lg transition-colors text-sm"
             >
               セッションを終了する
             </button>
@@ -268,7 +268,7 @@ export default function CoachingSessionPage() {
             <div
               key={turn}
               className={`h-1.5 flex-1 rounded-full transition-colors ${
-                userTurnCount >= turn ? "bg-indigo-500" : "bg-gray-200"
+                userTurnCount >= turn ? "bg-gray-900" : "bg-gray-200"
               }`}
             />
           ))}
@@ -298,13 +298,13 @@ export default function CoachingSessionPage() {
             placeholder="ここに回答を入力してください..."
             disabled={isSubmitting}
             rows={4}
-            className="w-full bg-white border border-indigo-300 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-500 resize-none disabled:opacity-60"
+            className="w-full border border-gray-200 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:border-gray-400 resize-none disabled:opacity-60 min-h-[100px]"
             style={{ fontSize: "16px" }}
           />
           <button
             type="submit"
             disabled={!userInput.trim() || isSubmitting}
-            className="mt-2 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="mt-2 w-full py-3 bg-gray-900 hover:bg-gray-700 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
           >
             {isSubmitting ? (
               <span className="flex items-center justify-center gap-2">
@@ -327,8 +327,8 @@ export default function CoachingSessionPage() {
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
                     msg.role === "assistant"
-                      ? "bg-indigo-50 border border-indigo-200 text-gray-800"
-                      : "bg-gray-100 border border-gray-200 text-gray-800"
+                      ? "bg-blue-50 border border-blue-200 text-gray-900"
+                      : "bg-gray-100 border border-gray-200 text-gray-900"
                   }`}
                 >
                   {msg.content}
