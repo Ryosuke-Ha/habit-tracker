@@ -266,7 +266,7 @@ export default function CoachingPage() {
             <button
               type="button"
               onClick={() => { setAddGoalOpen(false); setNewGoalTitle(""); }}
-              className="px-3 py-2 text-gray-500 text-sm hover:text-gray-300"
+              className="px-3 py-2 text-gray-500 text-sm hover:text-gray-700"
             >
               取消
             </button>
