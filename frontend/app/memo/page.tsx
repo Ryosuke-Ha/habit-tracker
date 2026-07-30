@@ -538,10 +538,10 @@ export default function MemoPage() {
       {/* Modal */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
         >
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-sm p-4 sm:p-5 max-h-[90vh] overflow-y-auto">
             <h2 className="text-base font-bold text-gray-900 mb-4">
               {editingId !== null ? "メモを編集" : "新しいメモを追加"}
             </h2>
@@ -555,7 +555,7 @@ export default function MemoPage() {
                   placeholder="例: 資料を印刷する"
                   required
                   autoFocus
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-purple-300"
                 />
               </div>
               <div>
@@ -566,37 +566,37 @@ export default function MemoPage() {
                   min={getTodayStr()}
                   onChange={(e) => setModalDate(e.target.value)}
                   required
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-purple-300"
                 />
               </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
+              <div className="flex flex-col gap-3">
+                <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">時間（任意）</label>
                   <select
                     value={modalTime}
                     onChange={(e) => handleModalTimeChange(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-purple-300"
                   >
                     <option value="">未設定</option>
                     {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
-                <div className="flex-1">
+                <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">場所（任意）</label>
                   <input
                     type="text"
                     value={modalLocation}
                     onChange={(e) => setModalLocation(e.target.value)}
                     placeholder="例: オフィス"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-purple-300"
                   />
                 </div>
               </div>
               {/* Notification settings */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">通知設定</label>
-                <div className="flex gap-3">
-                  <div className="flex-1">
+                <div className="flex flex-col gap-3">
+                  <div>
                     <label className="block text-xs text-gray-400 mb-1">通知1</label>
                     <select
                       value={modalNotif1 ?? ""}
@@ -605,7 +605,7 @@ export default function MemoPage() {
                         setModalNotif1(val);
                         if (val === null) setModalNotif2(null);
                       }}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-purple-300"
                     >
                       {NOTIFICATION_OPTIONS.map((opt) => (
                         <option
@@ -618,7 +618,7 @@ export default function MemoPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="flex-1">
+                  <div>
                     <label className="block text-xs text-gray-400 mb-1">通知2</label>
                     <select
                       value={modalNotif2 ?? ""}
@@ -627,7 +627,7 @@ export default function MemoPage() {
                         setModalNotif2(val);
                       }}
                       disabled={modalNotif1 === null}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                     >
                       {NOTIFICATION_OPTIONS.map((opt) => (
                         <option
