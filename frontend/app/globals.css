@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ページ遷移のちらつき防止 */
-html {
-  background-color: #000000;
-}
 
 @keyframes slideUpFadeIn {
   from {
