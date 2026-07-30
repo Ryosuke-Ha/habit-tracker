@@ -192,8 +192,8 @@ export default function CoachingSessionPage() {
               disabled={isCompleting || userTurnCount < 3}
               className={`text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                 userTurnCount >= 3
-                  ? "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500"
-                  : "border border-indigo-700 text-indigo-400 hover:bg-indigo-900/50"
+                  ? "bg-white hover:bg-gray-200 text-black"
+                  : "border border-gray-700 text-gray-400 hover:border-gray-500"
               }`}
             >
               {isCompleting ? (
@@ -243,7 +243,7 @@ export default function CoachingSessionPage() {
 
       {/* Prominent current question / summary */}
       {prominentMsg && (
-        <div className={`mb-6 rounded-2xl border p-5 ${isCompleted ? "border-green-800 bg-green-950/30" : "border-indigo-700 bg-indigo-950/50"}`}>
+        <div className={`mb-6 rounded-2xl border p-5 ${isCompleted ? "border-green-800 bg-green-950/30" : "border-gray-700 bg-gray-900"}`}>
           {isCompleted && (
             <p className="text-xs font-semibold text-green-400 uppercase tracking-wide mb-3">セッションまとめ</p>
           )}
@@ -253,7 +253,7 @@ export default function CoachingSessionPage() {
           {isCompleted && (
             <button
               onClick={() => router.push("/coaching")}
-              className="mt-5 w-full py-3 bg-indigo-700 hover:bg-indigo-600 text-white font-semibold rounded-xl transition-colors"
+              className="mt-5 w-full py-3 bg-white hover:bg-gray-200 text-black font-semibold rounded-xl transition-colors"
             >
               セッションを終了する
             </button>
@@ -268,7 +268,7 @@ export default function CoachingSessionPage() {
             <div
               key={turn}
               className={`h-1.5 flex-1 rounded-full transition-colors ${
-                userTurnCount >= turn ? "bg-indigo-500" : "bg-gray-800"
+                userTurnCount >= turn ? "bg-white" : "bg-gray-800"
               }`}
             />
           ))}
@@ -298,13 +298,13 @@ export default function CoachingSessionPage() {
             placeholder="ここに回答を入力してください..."
             disabled={isSubmitting}
             rows={4}
-            className="w-full bg-gray-900 border border-indigo-800 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 resize-none disabled:opacity-60"
+            className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 resize-none disabled:opacity-60"
             style={{ fontSize: "16px" }}
           />
           <button
             type="submit"
             disabled={!userInput.trim() || isSubmitting}
-            className="mt-2 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="mt-2 w-full py-3 bg-white hover:bg-gray-200 text-black font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isSubmitting ? (
               <span className="flex items-center justify-center gap-2">
@@ -327,7 +327,7 @@ export default function CoachingSessionPage() {
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
                     msg.role === "assistant"
-                      ? "bg-indigo-950/80 border border-indigo-800 text-indigo-100"
+                      ? "bg-gray-900 border border-gray-800 text-gray-200"
                       : "bg-gray-900 border border-gray-700 text-gray-200"
                   }`}
                 >
