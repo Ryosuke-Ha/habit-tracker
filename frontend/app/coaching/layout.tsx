@@ -9,14 +9,14 @@ export default function CoachingLayout({
 }) {
   useEffect(() => {
     const prev = document.body.style.backgroundColor;
-    document.body.style.backgroundColor = "#0a0a0a";
+    document.body.style.backgroundColor = "#ffffff";
     return () => {
       document.body.style.backgroundColor = prev;
     };
   }, []);
 
   return (
-    <div className="-mx-4 -my-8 px-4 py-8 min-h-screen bg-[#0a0a0a]">
+    <div className="-mx-4 -my-8 px-4 py-8 min-h-screen bg-white">
       {children}
     </div>
   );
