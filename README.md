@@ -8,6 +8,21 @@ Features AI coaching, weekly/monthly retrospectives, Slack notifications, and MC
 
 In daily use since March 2026.
 
+No public demo — the app holds personal habit data.
+
+---
+
+## Screenshots
+
+### Today's TODOs 
+ <img width="557" height="731" alt="スクリーンショット 2026-08-01 17 25 14" src="https://github.com/user-attachments/assets/161945d2-8cd1-41e8-9291-af8227aab94c" />
+
+### Weekly Retrospective (KPT) 
+<img width="513" height="846" alt="スクリーンショット 2026-08-01 17 27 50" src="https://github.com/user-attachments/assets/3efc25f6-5cbe-40f1-b660-8f722283def1" />
+
+### AI Coaching
+<img width="510" height="839" alt="スクリーンショット 2026-08-01 17 30 33" src="https://github.com/user-attachments/assets/7e93fa1b-6056-4a8e-87cc-feb2860d9d30" />
+
 ---
 
 ## Features
