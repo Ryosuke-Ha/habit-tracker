@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import anthropic
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import models
@@ -16,6 +16,7 @@ from domain.value_objects import WeekPeriod
 from repositories.coaching_session_repository import CoachingSessionRepository
 from services.coaching_context import build_coaching_context, build_message_context, build_system_prompt
 from services.weekly_stats import get_weekly_stats
+from utils.security import claude_rate_limiter, truncate
 
 router = APIRouter(prefix="/coaching", tags=["coaching"], dependencies=[Depends(verify_api_key)])
 
@@ -82,17 +83,20 @@ class CoachingGoalOut(BaseModel):
         from_attributes = True
 
 
+MAX_MESSAGES_PER_SESSION = 20
+
+
 class SendMessageRequest(BaseModel):
-    content: str
+    content: str = Field(..., min_length=1, max_length=1000)
 
 
 class CreateGoalRequest(BaseModel):
-    title: str
+    title: str = Field(..., min_length=1, max_length=200)
     due_date: Optional[str] = None
 
 
 class UpdateGoalRequest(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=200)
     due_date: Optional[str] = None
     status: Optional[str] = None
 
@@ -217,20 +221,24 @@ def create_session(
     )
 
     if prev_commit_text:
+        safe_commit = truncate(prev_commit_text, 200).replace("\n", " ")
         first_prompt = (
             f"新しいコーチングセッションを開始してください（Turn1）。"
-            f"前回「{prev_commit_text}」と決めていましたね。今週はどうでしたか？"
+            f"前回「{safe_commit}」と決めていましたね。今週はどうでしたか？"
             f"という問いかけで始めてください。"
         )
     elif has_prev_summary:
         first_prompt = "新しいコーチングセッションを開始してください（Turn1）。前回のセッションを踏まえて、今週のパターンへの気づきを促す問いかけを1つ生成してください。"
     elif prev_try:
-        first_try = prev_try[0]["content"]
-        first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。先週「{first_try}」というTryを設定していたことを踏まえて、今週のパターンへの気づきを促す問いかけを1つ生成してください。"
+        safe_try = truncate(prev_try[0]["content"], 200).replace("\n", " ")
+        first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。先週「{safe_try}」というTryを設定していたことを踏まえて、今週のパターンへの気づきを促す問いかけを1つ生成してください。"
     elif rate >= 70:
         first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。今週の習慣達成率は{rate}%でした。今週のパターンへの気づきを促す問いかけを1つ生成してください。"
     else:
         first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。今週の習慣達成率は{rate}%でした。今週のパターンへの気づきを促す問いかけを1つ生成してください。"
+
+    if not claude_rate_limiter.is_allowed(user_email):
+        raise HTTPException(status_code=429, detail="1日のAI呼び出し上限に達しました。明日また試してください。")
 
     first_content = call_claude(system, [{"role": "user", "content": first_prompt}])
 
@@ -255,10 +263,19 @@ def send_message(
     session = db.query(models.CoachingSession).filter_by(id=session_id, user_id=user_email).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    msg_count = (
+        db.query(models.CoachingMessage)
+        .filter_by(session_id=session_id)
+        .count()
+    )
+    if msg_count >= MAX_MESSAGES_PER_SESSION:
+        raise HTTPException(status_code=400, detail="このセッションのメッセージ数が上限に達しました。")
+
     try:
         user_msg = session.add_message("user", body.content)
-    except InvalidStateTransitionError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except InvalidStateTransitionError:
+        raise HTTPException(status_code=400, detail="セッションが完了済みのためメッセージを送信できません。")
     db.add(user_msg)
     db.flush()
 
@@ -269,6 +286,9 @@ def send_message(
         .all()
     )
     conversation = [{"role": m.role, "content": m.content} for m in all_msgs]
+
+    if not claude_rate_limiter.is_allowed(user_email):
+        raise HTTPException(status_code=429, detail="1日のAI呼び出し上限に達しました。明日また試してください。")
 
     system, recent_msgs = build_message_context(session, conversation)
     ai_content = call_claude(system, recent_msgs)
@@ -301,6 +321,9 @@ def complete_session(
     )
     conversation = [{"role": m.role, "content": m.content} for m in all_msgs]
 
+    if not claude_rate_limiter.is_allowed(user_email):
+        raise HTTPException(status_code=429, detail="1日のAI呼び出し上限に達しました。明日また試してください。")
+
     system = build_system_prompt(session.context or "")
 
     # Extract last user message as commit_content (Turn3 response)
@@ -332,8 +355,8 @@ def complete_session(
     db.add(summary_msg)
     try:
         session.complete(summary_content, commit_content)
-    except InvalidStateTransitionError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except InvalidStateTransitionError:
+        raise HTTPException(status_code=400, detail="セッションを完了できません。既に完了済みです。")
     db.commit()
     db.refresh(session)
     return session

@@ -9,6 +9,7 @@ from services.weekly_stats import (
     get_achievement_rate_vs_last_week,
     get_weekly_stats,
 )
+from utils.security import sanitize_user_input, truncate
 
 SYSTEM_PROMPT_TEMPLATE = """あなたはプロのライフコーチです。認知科学コーチングの原則に基づき、以下を厳守してください。
 
@@ -79,11 +80,11 @@ def build_coaching_context(user_id: str, db: Session) -> tuple:
     if review:
         for item in review.kpt_items:
             if item.type == "keep" and len(keep_items) < 3:
-                keep_items.append(item.content)
+                keep_items.append(sanitize_user_input(item.content))
             elif item.type == "problem" and len(problem_items) < 3:
-                problem_items.append(item.content)
+                problem_items.append(sanitize_user_input(item.content))
             elif item.type == "try" and len(try_items) < 3:
-                try_items.append(item.content)
+                try_items.append(sanitize_user_input(item.content))
 
     prev_week_start = WeekPeriod.previous().start
     prev_review = db.query(models.WeeklyReview).filter_by(user_id=user_id, week_start_date=prev_week_start).first()
@@ -91,7 +92,7 @@ def build_coaching_context(user_id: str, db: Session) -> tuple:
     if prev_review:
         prev_try_kpt = [i for i in prev_review.kpt_items if i.type == "try"][:3]
         last_week_try_items = [
-            f"{i.content}（{'達成' if i.is_completed else '未達成'}）"
+            f"{sanitize_user_input(i.content)}（{'達成' if i.is_completed else '未達成'}）"
             for i in prev_try_kpt
         ]
         completed = sum(1 for i in prev_try_kpt if i.is_completed)
@@ -105,7 +106,7 @@ def build_coaching_context(user_id: str, db: Session) -> tuple:
         .limit(3)
         .all()
     )
-    goals_data = [{"title": g.title} for g in active_goals]
+    goals_data = [{"title": sanitize_user_input(g.title)} for g in active_goals]
 
     prev_session = (
         db.query(models.CoachingSession)
@@ -114,8 +115,8 @@ def build_coaching_context(user_id: str, db: Session) -> tuple:
         .first()
     )
     raw_summary: Optional[str] = prev_session.summary if prev_session else None
-    prev_summary: Optional[str] = raw_summary[:300] if raw_summary else None
-    prev_commit: Optional[str] = prev_session.commit_content if prev_session else None
+    prev_summary: Optional[str] = sanitize_user_input(truncate(raw_summary, 300)) if raw_summary else None
+    prev_commit: Optional[str] = sanitize_user_input(prev_session.commit_content) if prev_session else None
 
     nl = chr(10)
     context_xml = f"""<coaching_context>
