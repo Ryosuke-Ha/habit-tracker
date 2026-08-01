@@ -1,10 +1,12 @@
 # habit-tracker
 
+[![Backend CI](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/frontend-ci.yml)
+
 A personal habit management web app based on Atomic Habits principles.
 Features AI coaching, weekly/monthly retrospectives, Slack notifications, and MCP integration.
 
-Built to demonstrate production-grade architecture with DDD, multi-agent CI, and Claude API integration
-across Web, Slack, and MCP surfaces — all sharing a single FastAPI backend.
+In daily use since March 2026.
 
 ---
 
@@ -36,9 +38,9 @@ across Web, Slack, and MCP surfaces — all sharing a single FastAPI backend.
 
 | Category | Technology |
 |---|---|
-| Frontend | Next.js 14<br/>App Router, TypeScript, Tailwind CSS |
+| Frontend | Next.js 14, App Router, TypeScript, Tailwind CSS |
 | Mobile | React Native (Expo SDK 54) |
-| Backend | FastAPI (Python 3.11)<br/>SQLAlchemy, Alembic |
+| Backend | FastAPI (Python 3.11), SQLAlchemy, Alembic |
 | Database | PostgreSQL (Supabase) |
 | Auth | NextAuth.js (Google OAuth) |
 | Infrastructure | Vercel (Frontend) · Railway (Backend + Slack Bot) |
@@ -99,21 +101,20 @@ This keeps the computation close to the data and leaves the frontend as a pure r
 | Weekly period calculation | `WeekPeriod` value object | Single source of truth; eliminates scattered date math |
 | Achievement rate | API layer (`WeeklyAchievementService`) | Shared by Web, Slack Bot, and MCP without duplication |
 | Subtask progress | API response (serialiser) | Frontend receives ready-to-render data |
-| Prompt injection sanitisation | `utils/sanitize.py` | Centralised; applied before any user text reaches Claude |
+| Input sanitisation | `utils/security.sanitize_user_input()` | Centralised; applied before any user text reaches Claude |
 | Notification timing | `calc_notification_datetime()` | Offset logic isolated from the scheduler |
 
 ---
 
 ## Design Decisions
 
-### 1. Single API consumed by Web, Slack, and MCP
+### 1. Single API consumed by Web, Mobile, Slack, and MCP
 
-All three surfaces call the same FastAPI endpoints with the same auth header (`X-API-Key`).
-The Web UI, the Slack DataOperator Bot, and the MCP server are treated as equal clients.
+All four surfaces call the same FastAPI endpoints with the same auth header (`X-API-Key`).
+The Web UI, the Mobile app, the Slack Bot, and the MCP server are treated as equal clients.
 
 *Why:* Avoids logic drift between surfaces. A rule added to the API is immediately available
-everywhere. This is the core principle from Nakajimasou's AI-Native architecture:
-business logic lives in the API, not in the client.
+everywhere — business logic lives in the API, not in the client.
 
 ### 2. MCP in a separate repository
 
@@ -133,15 +134,20 @@ It also makes the boundary explicit: the MCP server is a client, not part of the
 Opus was used initially for coaching but replaced with Sonnet after cost analysis showed
 ~80% reduction with no measurable quality drop for structured 3-turn sessions.
 
-### 4. Prompt injection defence via sanitisation, not XML escaping alone
+### 4. Prompt injection defence: XML escaping + length caps, not pattern matching
 
-User-supplied text (KPT items, coaching replies) is passed through `sanitize_for_prompt()`
+User-supplied text (KPT items, coaching replies) is passed through `sanitize_user_input()`
 before being embedded in any Claude message.
-The function strips known injection patterns (`ignore previous instructions`, `system:`, etc.)
-and enforces per-field length limits (KPT: 300 chars, coaching: 1000 chars).
+The function applies XML escaping (`html.escape`) and neutralises template placeholders (`{`, `}`).
 
-*Why not XML escaping only:* XML escaping prevents tag injection but does not remove
-natural-language override attempts. Both layers are needed.
+*Why not pattern matching:* Denylist approaches that strip phrases like
+`ignore previous instructions` are inherently incomplete — paraphrased overrides pass through.
+Pattern matching is not used here.
+Defence relies instead on structural isolation: user text is always enclosed in XML tags,
+length is capped per field (KPT: 300 chars, coaching: 1000 chars), and user content
+never appears in the system prompt or tool definitions.
+This is a layered approach, not a complete defence — prompt injection at the model level
+remains an open research problem.
 
 ### 5. PR auto-creation, manual merge
 
@@ -200,13 +206,14 @@ but would not scale to a large dataset without a dedicated `streak` column updat
 
 ```mermaid
 graph TD
-    A[Web UI<br/>Next.js / Vercel] --> D[FastAPI<br/>Railway]
-    B[Slack Bot<br/>Railway] --> D
-    C[Claude.ai<br/>via MCP] --> E[habit-tracker-mcp<br/>Railway]
-    E --> D
-    D --> F[(PostgreSQL<br/>Supabase)]
-    D --> G[Anthropic<br/>Claude API]
-    D --> H[Slack API]
+    A[Web UI / Next.js] --> D[FastAPI / Railway]
+    B[Mobile / Expo] --> D
+    C[Slack Bot / Railway] --> D
+    E[Claude.ai via MCP] --> F[habit-tracker-mcp / Railway]
+    F --> D
+    D --> G[(PostgreSQL / Supabase)]
+    D --> H[Anthropic Claude API]
+    D --> I[Slack API]
 ```
 
 ### Slack Auto-Fix Bot Sequence
@@ -302,10 +309,9 @@ Use [habit-tracker-mcp](https://github.com/Ryosuke-Ha/habit-tracker-mcp) to oper
 ## Security
 
 - API key authentication (`X-API-Key` header) — all surfaces use the same key
-- Rate limiting via `slowapi` (coaching: 10/hour, analysis: 5/hour)
-- Prompt injection sanitisation (`utils/sanitize.py`)
-- Security headers (`X-Frame-Options`, `X-Content-Type-Options`, `X-XSS-Protection`)
-- Input validation via Pydantic with per-field length limits
+- Claude API rate limiting: 30 calls per user per day (in-memory, daily window)
+- Input sanitisation via `sanitize_user_input()`: XML escaping + template placeholder neutralisation
+- Input length caps enforced at the API layer (Pydantic field constraints)
 
 ---
 
