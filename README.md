@@ -2,12 +2,9 @@
 
 [![Backend CI](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/backend-ci.yml)
 [![Frontend CI](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/Ryosuke-Ha/habit-tracker/actions/workflows/frontend-ci.yml)
-[![Vercel](https://img.shields.io/badge/deploy-Vercel-black?logo=vercel)](https://habit-tracker-two-peach.vercel.app)
 
 A personal habit management web app based on Atomic Habits principles.
 Features AI coaching, weekly/monthly retrospectives, Slack notifications, and MCP integration.
-
-**Demo:** https://habit-tracker-two-peach.vercel.app
 
 ---
 
