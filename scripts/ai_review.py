@@ -6,6 +6,43 @@ from github import Github
 
 MAX_DIFF_CHARS = 50000
 
+ADVERSARIAL_SYSTEM_PROMPT = """
+You are a hostile code reviewer. Your job is NOT to be helpful.
+Your job is to find everything wrong with this code change.
+
+Review this diff adversarially for:
+1. Correctness — will this actually work in all cases?
+2. Simplicity — is this more complex than it needs to be?
+3. Hidden assumptions — what does this code assume that could be wrong?
+4. Edge cases — what inputs or states would break this?
+5. Security — what could an attacker exploit?
+
+You have NO context about why this change was made.
+You have NOT seen the conversation that produced it.
+Treat every design decision as potentially wrong until proven otherwise.
+
+Output in this exact format:
+
+## ⚔️ Adversarial Review
+
+### Assumptions Made
+{list assumptions embedded in the code — be specific about line numbers}
+
+### Design Decisions (and why they might be wrong)
+{list decisions with counterarguments}
+
+### Correctness Concerns
+{specific bugs or logic errors — reference line numbers where possible}
+
+### Simplicity Issues
+{unnecessary complexity, over-engineering, or abstraction}
+
+### Where to Focus Your Review
+{top 3 specific things the human should read carefully, with line references}
+
+If there are no significant concerns in a category, write "None found."
+"""
+
 
 def get_pr_diff() -> str:
     """PRの差分を取得する"""
@@ -106,17 +143,58 @@ PRの差分をレビューして、以下の観点でフィードバックを提
     return message.content[0].text
 
 
-def post_review_comment(review: str) -> None:
-    """レビュー結果をPRにコメントとして投稿する"""
+def adversarial_review_with_claude(diff: str) -> str:
+    """
+    会話履歴を持たないサブエージェントによる敵対的レビュー。
+    メインセッションの盲点を排除するため、独立したAPIコールで実行する。
+    """
+    if not diff.strip():
+        return "No changes to review."
+
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    review_diff = diff
+    if len(diff) > 30000:
+        review_diff = diff[:30000] + "\n\n... (diff truncated for length)"
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1500,
+        system=ADVERSARIAL_SYSTEM_PROMPT,
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    f"Review this code change adversarially:\n\n"
+                    f"```diff\n{review_diff}\n```"
+                ),
+            }
+        ],
+    )
+
+    return message.content[0].text
+
+
+def post_review_comment(standard_review: str, adversarial_review: str) -> None:
+    """通常レビューと敵対的レビューの両方をPRにコメントとして投稿する"""
     g = Github(os.environ["GITHUB_TOKEN"])
     repo = g.get_repo(os.environ["REPO_NAME"])
     pr = repo.get_pull(int(os.environ["PR_NUMBER"]))
 
     comment_body = (
         "## \U0001f916 AI Code Review\n\n"
-        f"{review}\n\n"
+        "### \u2705 Standard Review\n\n"
+        f"{standard_review}\n\n"
+        "---\n\n"
+        "### \u2694\ufe0f Adversarial Review (Subagent)\n\n"
+        "> This agent has no conversation history and no context about "
+        "why this change was made.\n"
+        "> It reviews only the code, without assumptions from the main "
+        "session.\n\n"
+        f"{adversarial_review}\n\n"
         "---\n"
-        "*このレビューはClaude Haiku by Anthropicが自動生成しました*\n"
+        "*Standard review by Claude Haiku \u00b7 "
+        "Adversarial review by Claude Sonnet (independent session)*\n"
     )
 
     for comment in pr.get_issue_comments():
@@ -136,21 +214,35 @@ def main() -> None:
         return
 
     print(f"差分サイズ: {len(diff)}文字")
-    print("Claudeでレビュー中...")
+
+    print("Claudeで通常レビュー中...")
     try:
-        review = review_with_claude(diff)
+        standard_review = review_with_claude(diff)
     except anthropic.BadRequestError as e:
         print(f"API BadRequestError: {e}")
-        review = "⚠️ AIレビューをスキップしました（APIリクエストエラー）"
+        standard_review = "⚠️ AIレビューをスキップしました（APIリクエストエラー）"
     except anthropic.APIStatusError as e:
         print(f"API StatusError: {e}")
-        review = "⚠️ AIレビューをスキップしました（APIエラー）"
+        standard_review = "⚠️ AIレビューをスキップしました（APIエラー）"
     except Exception as e:
         print(f"予期しないエラー: {e}")
-        review = "⚠️ AIレビューをスキップしました（予期しないエラー）"
+        standard_review = "⚠️ AIレビューをスキップしました（予期しないエラー）"
+
+    print("敵対的サブエージェントでレビュー中...")
+    try:
+        adversarial_review = adversarial_review_with_claude(diff)
+    except anthropic.BadRequestError as e:
+        print(f"Adversarial API BadRequestError: {e}")
+        adversarial_review = "⚠️ 敵対的レビューをスキップしました（APIリクエストエラー）"
+    except anthropic.APIStatusError as e:
+        print(f"Adversarial API StatusError: {e}")
+        adversarial_review = "⚠️ 敵対的レビューをスキップしました（APIエラー）"
+    except Exception as e:
+        print(f"Adversarial 予期しないエラー: {e}")
+        adversarial_review = "⚠️ 敵対的レビューをスキップしました（予期しないエラー）"
 
     print("PRにコメントを投稿中...")
-    post_review_comment(review)
+    post_review_comment(standard_review, adversarial_review)
 
     print("完了!")
 
