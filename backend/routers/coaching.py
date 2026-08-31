@@ -14,8 +14,11 @@ from domain.enums import GoalStatus, SessionStatus
 from domain.exceptions import InvalidStateTransitionError
 from domain.value_objects import WeekPeriod
 from repositories.coaching_session_repository import CoachingSessionRepository
-from services.coaching_context import build_coaching_context, build_message_context, build_system_prompt
-from services.weekly_stats import get_weekly_stats
+from services.coaching_context import (
+    build_coaching_context,
+    build_message_context,
+    build_system_prompt,
+)
 from utils.security import claude_rate_limiter, truncate
 
 router = APIRouter(prefix="/coaching", tags=["coaching"], dependencies=[Depends(verify_api_key)])
@@ -121,6 +124,41 @@ def call_claude(system: str, messages: list, max_tokens: int = 500) -> str:
     return response.content[0].text
 
 
+def generate_first_message(
+    context_xml: str,
+    session_count: int,
+    prev_commit: Optional[str],
+    achievement_rate: int,
+    vs_last_week: str,
+) -> str:
+    """セッション回数・前回コミット・達成状況に応じて最初の問いかけを生成する"""
+    system = build_system_prompt(context_xml)
+    is_improvement = vs_last_week.startswith("+")
+
+    if prev_commit:
+        safe_commit = truncate(prev_commit, 100).replace("\n", " ")
+        if is_improvement:
+            seed = (
+                f"前回コミット「{safe_commit}」達成率{vs_last_week}改善。"
+                f"成功要因を聞く。"
+            )
+        else:
+            seed = (
+                f"前回コミット「{safe_commit}」達成率変化{vs_last_week}。"
+                f"状況を責めずに聞く。"
+            )
+    elif achievement_rate >= 80:
+        seed = f"達成率{achievement_rate}%と高い。何が良かったか聞く。"
+    else:
+        seed = f"達成率{achievement_rate}%。今の気持ちを聞く。"
+
+    return call_claude(
+        system,
+        [{"role": "user", "content": f"セッションを開始してください。方針: {seed}"}],
+        max_tokens=300,
+    )
+
+
 # ---- Endpoints ----
 
 @router.get("/sessions", response_model=List[CoachingSessionSummaryOut])
@@ -175,35 +213,10 @@ def create_session(
     if existing:
         raise HTTPException(status_code=409, detail="Session already exists for this week")
 
-    # Gather scalar values needed for first_prompt selection
-    week_period = WeekPeriod.current()
-    stats = get_weekly_stats(week_period.start, db)
-    rate = stats["achievement_rate"]
-
-    prev_week_start = WeekPeriod.previous().start
-    prev_review = (
-        db.query(models.WeeklyReview)
-        .filter_by(user_id=user_email, week_start_date=prev_week_start)
-        .first()
-    )
-    prev_try = []
-    if prev_review:
-        prev_try = [
-            {"content": i.content, "is_completed": i.is_completed}
-            for i in prev_review.kpt_items if i.type == "try"
-        ][:3]
-
-    context_xml, prev_commit = build_coaching_context(user_email, db)
-
-    prev_completed = (
-        db.query(models.CoachingSession)
-        .filter_by(user_id=user_email, status=SessionStatus.COMPLETED)
-        .order_by(models.CoachingSession.created_at.desc())
-        .first()
-    )
-    has_prev_summary = bool(prev_completed and prev_completed.summary)
-    prev_summary_text = prev_completed.summary if prev_completed else None
-    prev_commit_text = prev_completed.commit_content if prev_completed else None
+    context_xml, prev_commit, meta = build_coaching_context(user_email, db)
+    session_count = meta["session_count"]
+    vs_last_week = meta["vs_last_week"]
+    achievement_rate = meta["achievement_rate"]
 
     session = models.CoachingSession(
         user_id=user_email,
@@ -214,33 +227,12 @@ def create_session(
     db.add(session)
     db.flush()
 
-    system = build_system_prompt(
-        context_xml,
-        previous_summary=prev_summary_text or "なし",
-        previous_commit=prev_commit_text or "なし",
-    )
-
-    if prev_commit_text:
-        safe_commit = truncate(prev_commit_text, 200).replace("\n", " ")
-        first_prompt = (
-            f"新しいコーチングセッションを開始してください（Turn1）。"
-            f"前回「{safe_commit}」と決めていましたね。今週はどうでしたか？"
-            f"という問いかけで始めてください。"
-        )
-    elif has_prev_summary:
-        first_prompt = "新しいコーチングセッションを開始してください（Turn1）。前回のセッションを踏まえて、今週のパターンへの気づきを促す問いかけを1つ生成してください。"
-    elif prev_try:
-        safe_try = truncate(prev_try[0]["content"], 200).replace("\n", " ")
-        first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。先週「{safe_try}」というTryを設定していたことを踏まえて、今週のパターンへの気づきを促す問いかけを1つ生成してください。"
-    elif rate >= 70:
-        first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。今週の習慣達成率は{rate}%でした。今週のパターンへの気づきを促す問いかけを1つ生成してください。"
-    else:
-        first_prompt = f"新しいコーチングセッションを開始してください（Turn1）。今週の習慣達成率は{rate}%でした。今週のパターンへの気づきを促す問いかけを1つ生成してください。"
-
     if not claude_rate_limiter.is_allowed(user_email):
         raise HTTPException(status_code=429, detail="1日のAI呼び出し上限に達しました。明日また試してください。")
 
-    first_content = call_claude(system, [{"role": "user", "content": first_prompt}])
+    first_content = generate_first_message(
+        context_xml, session_count, prev_commit, achievement_rate, vs_last_week
+    )
 
     first_msg = models.CoachingMessage(
         session_id=session.id,
