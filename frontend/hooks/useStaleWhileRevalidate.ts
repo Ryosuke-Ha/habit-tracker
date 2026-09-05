@@ -43,6 +43,22 @@ export function getFromCache<T>(key: string): T | null {
 export function setToCache<T>(key: string, data: T, ttlMs: number): void {
   if (typeof window === "undefined") return
   try {
+    // 同じprefixの古いキャッシュを削除する
+    // 例: key="today_logs_2026-08-05" のとき prefix="today_logs" となり、
+    //     "swr_today_logs_*"（自分自身を除く）を削除する。
+    // これにより日付をサフィックスに持つキーが古い日付のまま蓄積しない。
+    // 注意: prefix はアンダースコア区切りの最後のセグメントを除いたもの。
+    //   "today_logs_2026-08-05" → ["today","logs","2026-08-05"] → prefix="today_logs"
+    //   "persistent_todos"      → ["persistent","todos"]        → prefix="persistent"
+    //   "scheduled_todos_today" → ["scheduled","todos","today"] → prefix="scheduled_todos"
+    const keyParts = key.split("_")
+    if (keyParts.length > 1) {
+      const prefix = keyParts.slice(0, -1).join("_")
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith(`swr_${prefix}_`) && k !== `swr_${key}`)
+        .forEach((k) => localStorage.removeItem(k))
+    }
+
     const entry: CacheEntry<T> = {
       data,
       cachedAt: Date.now(),

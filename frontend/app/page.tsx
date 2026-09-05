@@ -13,7 +13,7 @@ import { apiFetch } from "@/lib/api";
 import { SkeletonTodoPage } from "@/components/Skeleton";
 import { PageLoading } from "@/components/PageLoading";
 import { ValidatingIndicator } from "@/components/ValidatingIndicator";
-import { getFromCache, setToCache, invalidateSWRCachePrefix } from "@/hooks/useStaleWhileRevalidate";
+import { getFromCache, setToCache, invalidateSWRCache, invalidateSWRCachePrefix } from "@/hooks/useStaleWhileRevalidate";
 
 interface Template { id: number; name: string; }
 
@@ -57,6 +57,11 @@ interface ScheduledTodo {
 
 const WEEKDAY_LABELS = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
 
+const CACHE_KEYS = {
+  PERSISTENT_TODOS: "persistent_todos",
+  SCHEDULED_TODOS_TODAY: "scheduled_todos_today",
+} as const;
+
 function generateTimeOptions(): string[] {
   const times: string[] = [];
   for (let h = 0; h < 24; h++) {
@@ -67,6 +72,18 @@ function generateTimeOptions(): string[] {
   return times;
 }
 const TIME_OPTIONS = generateTimeOptions();
+
+/** JST（UTC+9）の翌日0時までのミリ秒を返す。scheduledTodosキャッシュの日付またぎを防ぐ */
+function getMsUntilMidnightJST(): number {
+  const now = new Date();
+  const jstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const nextMidnightJST = new Date(Date.UTC(
+    jstDate.getUTCFullYear(),
+    jstDate.getUTCMonth(),
+    jstDate.getUTCDate() + 1,
+  ));
+  return nextMidnightJST.getTime() - now.getTime();
+}
 
 function getDefaultTime(): string {
   const now = new Date();
@@ -164,6 +181,17 @@ export default function Home() {
       setIsValidating(true);
     }
 
+    const cachedPersistent = getFromCache<PersistentTodo[]>(CACHE_KEYS.PERSISTENT_TODOS);
+    if (Array.isArray(cachedPersistent)) {
+      setPersistentTodos(cachedPersistent);
+    }
+
+    // scheduled_todos_today はJST午前0時にexpireするため、日付またぎの問題なし
+    const cachedScheduled = getFromCache<ScheduledTodo[]>(CACHE_KEYS.SCHEDULED_TODOS_TODAY);
+    if (Array.isArray(cachedScheduled)) {
+      setScheduledTodos(cachedScheduled);
+    }
+
     try {
       const templatesRes = await apiFetch(`/templates`);
       if (!templatesRes.ok) throw new Error();
@@ -228,11 +256,13 @@ export default function Home() {
       if (persistentRes?.ok) {
         const pData: PersistentTodo[] = await persistentRes.json();
         setPersistentTodos(pData);
+        setToCache(CACHE_KEYS.PERSISTENT_TODOS, pData, 30 * 60 * 1000);
       }
 
       if (scheduledRes?.ok) {
         const sData: { todos: ScheduledTodo[] } = await scheduledRes.json();
         setScheduledTodos(sData.todos);
+        setToCache(CACHE_KEYS.SCHEDULED_TODOS_TODAY, sData.todos, getMsUntilMidnightJST());
       }
       setFetchError(null);
     } catch {
@@ -274,6 +304,7 @@ export default function Home() {
         });
         const newTodo: PersistentTodo = await res.json();
         setPersistentTodos((prev) => prev.map((t) => (t.id === tempId ? newTodo : t)));
+        invalidateSWRCache(CACHE_KEYS.PERSISTENT_TODOS);
       } catch {
         setPersistentTodos((prev) => prev.filter((t) => t.id !== tempId));
       } finally {
@@ -376,6 +407,7 @@ export default function Home() {
         method: "POST",
         headers: { "X-User-Email": email },
       });
+      invalidateSWRCache(CACHE_KEYS.PERSISTENT_TODOS);
     } catch {
       if (prevTodo) setPersistentTodos((prev) => prev.map((t) => (t.id === id ? prevTodo : t)));
     }
@@ -388,6 +420,7 @@ export default function Home() {
     setPersistentTodos((prev) => prev.filter((t) => t.id !== id));
     try {
       await apiFetch(`/persistent-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+      invalidateSWRCache(CACHE_KEYS.PERSISTENT_TODOS);
     } catch {
       setPersistentTodos(prevTodos);
     }
@@ -404,6 +437,7 @@ export default function Home() {
         method: "POST",
         headers: { "X-User-Email": email },
       });
+      invalidateSWRCache(CACHE_KEYS.SCHEDULED_TODOS_TODAY);
     } catch {
       setScheduledTodos((list) => list.map((t) => (t.id === id ? prev : t)));
     }
@@ -416,6 +450,7 @@ export default function Home() {
     setScheduledTodos((prev) => prev.filter((t) => t.id !== id));
     try {
       await apiFetch(`/scheduled-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+      invalidateSWRCache(CACHE_KEYS.SCHEDULED_TODOS_TODAY);
     } catch {
       setScheduledTodos(prevTodos);
     }
@@ -436,6 +471,7 @@ export default function Home() {
       .then((r) => r.json())
       .then((updated: ScheduledTodo) => {
         setScheduledTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, title: updated.title, scheduled_time: updated.scheduled_time, location: updated.location } : t)));
+        invalidateSWRCache(CACHE_KEYS.SCHEDULED_TODOS_TODAY);
       })
       .catch(() => {
         if (prevTodo) setScheduledTodos((prev) => prev.map((t) => (t.id === id ? prevTodo : t)));
@@ -461,6 +497,8 @@ export default function Home() {
       if (res.ok) {
         const newTodo: PersistentTodo = await res.json();
         setPersistentTodos((prev) => prev.map((t) => (t.id === tempId ? newTodo : t)));
+        invalidateSWRCache(CACHE_KEYS.PERSISTENT_TODOS);
+        invalidateSWRCachePrefix("today_logs_");
       }
     } catch {
       if (prevLog) setDailyLogs((prev) => [...prev, prevLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
@@ -487,6 +525,8 @@ export default function Home() {
           prev.map((l) => l.logId === tempLogId ? { logId: newLog.id, habitId: newLog.habit_id, title: newLog.title, scheduledTime: newLog.scheduled_time, location: newLog.location, isChecked: newLog.is_checked } : l)
             .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
         );
+        invalidateSWRCache(CACHE_KEYS.PERSISTENT_TODOS);
+        invalidateSWRCachePrefix("today_logs_");
       }
     } catch {
       if (prevTodo) setPersistentTodos((prev) => [...prev, prevTodo]);
