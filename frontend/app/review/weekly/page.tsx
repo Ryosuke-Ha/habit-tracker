@@ -116,6 +116,7 @@ export default function WeeklyReviewPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
+  const isKPTMutating = useRef(false);
 
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiCreatedAt, setAiCreatedAt] = useState<string | null>(null);
@@ -130,8 +131,10 @@ export default function WeeklyReviewPage() {
     (review?.kpt_items.filter((i) => i.type === "try").length ?? 0) > 0;
 
   // SWR データが更新されたらローカル state に同期
+  // KPT操作中はSWRの更新を無視する（古いDBデータでローカルstateが上書きされるのを防ぐ）
   useEffect(() => {
     if (swrData) {
+      if (isKPTMutating.current) return;
       setReview(swrData.review);
       setPrevTryItems(swrData.prevTryItems);
     }
@@ -171,6 +174,17 @@ export default function WeeklyReviewPage() {
     if (isGenerating) return;
     setIsGenerating(true);
     try {
+      // AI分析前にDBから最新のreviewデータを取得する
+      // （SWRが古いデータを持っている可能性があるため）
+      const latestRes = await apiFetch(
+        `/reviews/weekly/${currentWeekStart}`,
+        { headers: { "X-User-Email": email } }
+      );
+      if (latestRes.ok) {
+        const latestReview: WeeklyReview = await latestRes.json();
+        setReview(latestReview);
+      }
+
       const res = await apiFetch(
         `/reviews/weekly/${currentWeekStart}/analysis/generate`,
         { method: "POST", headers: { "X-User-Email": email } }
@@ -193,6 +207,7 @@ export default function WeeklyReviewPage() {
     const reviewId = review.id;
     const tempId = -Date.now();
     const tempItem: KPTItem = { id: tempId, review_id: reviewId, type, content, is_completed: false, created_at: new Date().toISOString() };
+    isKPTMutating.current = true;
     setReview((prev) => prev ? { ...prev, kpt_items: [...prev.kpt_items, tempItem] } : prev);
     setNewContent("");
     setAddingType(null);
@@ -207,6 +222,8 @@ export default function WeeklyReviewPage() {
       invalidateSWRCache(weekCacheKey);
     } catch {
       setReview((prev) => prev ? { ...prev, kpt_items: prev.kpt_items.filter((i) => i.id !== tempId) } : prev);
+    } finally {
+      isKPTMutating.current = false;
     }
   }
 
@@ -236,6 +253,7 @@ export default function WeeklyReviewPage() {
     const prevItem = review?.kpt_items.find((i) => i.id === itemId);
     const reviewId = review?.id;
     if (!reviewId) return;
+    isKPTMutating.current = true;
     setReview((prev) =>
       prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === itemId ? { ...i, content } : i)) } : prev
     );
@@ -258,6 +276,7 @@ export default function WeeklyReviewPage() {
       );
     } finally {
       setSavingId(null);
+      isKPTMutating.current = false;
     }
   }
 
@@ -266,6 +285,7 @@ export default function WeeklyReviewPage() {
     const reviewId = review?.id;
     if (!reviewId) return;
     const prevItems = review?.kpt_items ?? [];
+    isKPTMutating.current = true;
     setReview((prev) =>
       prev ? { ...prev, kpt_items: prev.kpt_items.filter((i) => i.id !== itemId) } : prev
     );
@@ -277,6 +297,8 @@ export default function WeeklyReviewPage() {
       invalidateSWRCache(weekCacheKey);
     } catch {
       setReview((prev) => prev ? { ...prev, kpt_items: prevItems } : prev);
+    } finally {
+      isKPTMutating.current = false;
     }
   }
 
