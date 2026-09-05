@@ -43,6 +43,16 @@ export function getFromCache<T>(key: string): T | null {
 export function setToCache<T>(key: string, data: T, ttlMs: number): void {
   if (typeof window === "undefined") return
   try {
+    // 同じprefixの古いキャッシュを削除する
+    // 例: "today_logs_2026-08-05" 保存時に "today_logs_2026-07-01" などを削除
+    const keyParts = key.split("_")
+    if (keyParts.length > 1) {
+      const prefix = keyParts.slice(0, -1).join("_")
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith(`swr_${prefix}_`) && k !== `swr_${key}`)
+        .forEach((k) => localStorage.removeItem(k))
+    }
+
     const entry: CacheEntry<T> = {
       data,
       cachedAt: Date.now(),

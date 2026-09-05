@@ -13,7 +13,7 @@ import { apiFetch } from "@/lib/api";
 import { SkeletonTodoPage } from "@/components/Skeleton";
 import { PageLoading } from "@/components/PageLoading";
 import { ValidatingIndicator } from "@/components/ValidatingIndicator";
-import { getFromCache, setToCache, invalidateSWRCachePrefix } from "@/hooks/useStaleWhileRevalidate";
+import { getFromCache, setToCache, invalidateSWRCache, invalidateSWRCachePrefix } from "@/hooks/useStaleWhileRevalidate";
 
 interface Template { id: number; name: string; }
 
@@ -164,6 +164,17 @@ export default function Home() {
       setIsValidating(true);
     }
 
+    const cachedPersistent = getFromCache<PersistentTodo[]>("persistent_todos");
+    if (cachedPersistent) {
+      setPersistentTodos(cachedPersistent);
+      if (!cachedLogs) setDataReady(true);
+    }
+
+    const cachedScheduled = getFromCache<ScheduledTodo[]>("scheduled_todos_today");
+    if (cachedScheduled) {
+      setScheduledTodos(cachedScheduled);
+    }
+
     try {
       const templatesRes = await apiFetch(`/templates`);
       if (!templatesRes.ok) throw new Error();
@@ -228,11 +239,13 @@ export default function Home() {
       if (persistentRes?.ok) {
         const pData: PersistentTodo[] = await persistentRes.json();
         setPersistentTodos(pData);
+        setToCache("persistent_todos", pData, 30 * 60 * 1000);
       }
 
       if (scheduledRes?.ok) {
         const sData: { todos: ScheduledTodo[] } = await scheduledRes.json();
         setScheduledTodos(sData.todos);
+        setToCache("scheduled_todos_today", sData.todos, 60 * 60 * 1000);
       }
       setFetchError(null);
     } catch {
@@ -274,6 +287,7 @@ export default function Home() {
         });
         const newTodo: PersistentTodo = await res.json();
         setPersistentTodos((prev) => prev.map((t) => (t.id === tempId ? newTodo : t)));
+        invalidateSWRCache("persistent_todos");
       } catch {
         setPersistentTodos((prev) => prev.filter((t) => t.id !== tempId));
       } finally {
@@ -376,6 +390,7 @@ export default function Home() {
         method: "POST",
         headers: { "X-User-Email": email },
       });
+      invalidateSWRCache("persistent_todos");
     } catch {
       if (prevTodo) setPersistentTodos((prev) => prev.map((t) => (t.id === id ? prevTodo : t)));
     }
@@ -388,6 +403,7 @@ export default function Home() {
     setPersistentTodos((prev) => prev.filter((t) => t.id !== id));
     try {
       await apiFetch(`/persistent-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+      invalidateSWRCache("persistent_todos");
     } catch {
       setPersistentTodos(prevTodos);
     }
@@ -404,6 +420,7 @@ export default function Home() {
         method: "POST",
         headers: { "X-User-Email": email },
       });
+      invalidateSWRCache("scheduled_todos_today");
     } catch {
       setScheduledTodos((list) => list.map((t) => (t.id === id ? prev : t)));
     }
@@ -416,6 +433,7 @@ export default function Home() {
     setScheduledTodos((prev) => prev.filter((t) => t.id !== id));
     try {
       await apiFetch(`/scheduled-todos/${id}`, { method: "DELETE", headers: { "X-User-Email": email } });
+      invalidateSWRCache("scheduled_todos_today");
     } catch {
       setScheduledTodos(prevTodos);
     }
@@ -436,6 +454,7 @@ export default function Home() {
       .then((r) => r.json())
       .then((updated: ScheduledTodo) => {
         setScheduledTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, title: updated.title, scheduled_time: updated.scheduled_time, location: updated.location } : t)));
+        invalidateSWRCache("scheduled_todos_today");
       })
       .catch(() => {
         if (prevTodo) setScheduledTodos((prev) => prev.map((t) => (t.id === id ? prevTodo : t)));
@@ -461,6 +480,7 @@ export default function Home() {
       if (res.ok) {
         const newTodo: PersistentTodo = await res.json();
         setPersistentTodos((prev) => prev.map((t) => (t.id === tempId ? newTodo : t)));
+        invalidateSWRCache("persistent_todos");
       }
     } catch {
       if (prevLog) setDailyLogs((prev) => [...prev, prevLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
@@ -487,6 +507,7 @@ export default function Home() {
           prev.map((l) => l.logId === tempLogId ? { logId: newLog.id, habitId: newLog.habit_id, title: newLog.title, scheduledTime: newLog.scheduled_time, location: newLog.location, isChecked: newLog.is_checked } : l)
             .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
         );
+        invalidateSWRCache("persistent_todos");
       }
     } catch {
       if (prevTodo) setPersistentTodos((prev) => [...prev, prevTodo]);
