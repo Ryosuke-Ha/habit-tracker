@@ -73,6 +73,18 @@ function generateTimeOptions(): string[] {
 }
 const TIME_OPTIONS = generateTimeOptions();
 
+/** JST（UTC+9）の翌日0時までのミリ秒を返す。scheduledTodosキャッシュの日付またぎを防ぐ */
+function getMsUntilMidnightJST(): number {
+  const now = new Date();
+  const jstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const nextMidnightJST = new Date(Date.UTC(
+    jstDate.getUTCFullYear(),
+    jstDate.getUTCMonth(),
+    jstDate.getUTCDate() + 1,
+  ));
+  return nextMidnightJST.getTime() - now.getTime();
+}
+
 function getDefaultTime(): string {
   const now = new Date();
   const hours = now.getHours();
@@ -170,12 +182,13 @@ export default function Home() {
     }
 
     const cachedPersistent = getFromCache<PersistentTodo[]>(CACHE_KEYS.PERSISTENT_TODOS);
-    if (cachedPersistent) {
+    if (Array.isArray(cachedPersistent)) {
       setPersistentTodos(cachedPersistent);
     }
 
+    // scheduled_todos_today はJST午前0時にexpireするため、日付またぎの問題なし
     const cachedScheduled = getFromCache<ScheduledTodo[]>(CACHE_KEYS.SCHEDULED_TODOS_TODAY);
-    if (cachedScheduled) {
+    if (Array.isArray(cachedScheduled)) {
       setScheduledTodos(cachedScheduled);
     }
 
@@ -249,7 +262,7 @@ export default function Home() {
       if (scheduledRes?.ok) {
         const sData: { todos: ScheduledTodo[] } = await scheduledRes.json();
         setScheduledTodos(sData.todos);
-        setToCache(CACHE_KEYS.SCHEDULED_TODOS_TODAY, sData.todos, 60 * 60 * 1000);
+        setToCache(CACHE_KEYS.SCHEDULED_TODOS_TODAY, sData.todos, getMsUntilMidnightJST());
       }
       setFetchError(null);
     } catch {
@@ -485,6 +498,7 @@ export default function Home() {
         const newTodo: PersistentTodo = await res.json();
         setPersistentTodos((prev) => prev.map((t) => (t.id === tempId ? newTodo : t)));
         invalidateSWRCache(CACHE_KEYS.PERSISTENT_TODOS);
+        invalidateSWRCachePrefix("today_logs_");
       }
     } catch {
       if (prevLog) setDailyLogs((prev) => [...prev, prevLog].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)));
@@ -512,6 +526,7 @@ export default function Home() {
             .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
         );
         invalidateSWRCache(CACHE_KEYS.PERSISTENT_TODOS);
+        invalidateSWRCachePrefix("today_logs_");
       }
     } catch {
       if (prevTodo) setPersistentTodos((prev) => [...prev, prevTodo]);
