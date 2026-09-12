@@ -283,7 +283,7 @@ def send_message(
         raise HTTPException(status_code=429, detail="1日のAI呼び出し上限に達しました。明日また試してください。")
 
     user_message_count = sum(1 for m in all_msgs if m.role == "user")
-    current_turn = min(user_message_count, 3)
+    current_turn = min(user_message_count + 1, 3)
     system, recent_msgs = build_message_context(session, conversation, current_turn=current_turn)
     ai_content = call_claude(system, recent_msgs)
 
