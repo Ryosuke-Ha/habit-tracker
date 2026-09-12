@@ -132,7 +132,7 @@ def generate_first_message(
     vs_last_week: str,
 ) -> str:
     """セッション回数・前回コミット・達成状況に応じて最初の問いかけを生成する"""
-    system = build_system_prompt(context_xml)
+    system = build_system_prompt(context_xml, current_turn=1)
     is_improvement = vs_last_week.startswith("+")
 
     if prev_commit:
@@ -282,7 +282,9 @@ def send_message(
     if not claude_rate_limiter.is_allowed(user_email):
         raise HTTPException(status_code=429, detail="1日のAI呼び出し上限に達しました。明日また試してください。")
 
-    system, recent_msgs = build_message_context(session, conversation)
+    user_message_count = sum(1 for m in all_msgs if m.role == "user")
+    current_turn = min(user_message_count + 1, 3)
+    system, recent_msgs = build_message_context(session, conversation, current_turn=current_turn)
     ai_content = call_claude(system, recent_msgs)
 
     ai_msg = models.CoachingMessage(
