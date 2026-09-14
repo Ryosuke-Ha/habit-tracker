@@ -302,21 +302,20 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
     setNewSubtaskTitle("");
     setIsSubmitting(true);
     try {
-      for (const line of lines) {
-        const tempId = -Date.now();
-        const tempSubtask: SubTask = { id: tempId, title: line, is_completed: false, order: subtasks.length };
+      await Promise.all(lines.map((line, i) => {
+        const tempId = -(Date.now() * 1000 + i);
+        const tempSubtask: SubTask = { id: tempId, title: line, is_completed: false, order: subtasks.length + i };
         setSubtasks((prev) => [...prev, tempSubtask]);
-        try {
-          const res = await apiFetch(`/subtasks`, {
-            method: "POST",
-            body: JSON.stringify({ todo_type: subtaskType, todo_id: subtaskTodoId, title: line }),
-          });
-          const created: SubTask = await res.json();
-          setSubtasks((prev) => prev.map((s) => (s.id === tempId ? created : s)));
-        } catch {
-          setSubtasks((prev) => prev.filter((s) => s.id !== tempId));
-        }
-      }
+        return apiFetch(`/subtasks`, {
+          method: "POST",
+          body: JSON.stringify({ todo_type: subtaskType, todo_id: subtaskTodoId, title: line }),
+        })
+          .then(async (res) => {
+            const created = await res.json() as SubTask;
+            setSubtasks((prev) => prev.map((s) => (s.id === tempId ? created : s)));
+          })
+          .catch(() => { setSubtasks((prev) => prev.filter((s) => s.id !== tempId)); });
+      }));
     } finally {
       setIsSubmitting(false);
     }
