@@ -293,6 +293,35 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
     }
   }
 
+  async function handleAddSubtasks() {
+    const lines = newSubtaskTitle
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+    if (lines.length === 0 || isSubmitting) return;
+    setNewSubtaskTitle("");
+    setIsSubmitting(true);
+    try {
+      for (const line of lines) {
+        const tempId = -Date.now();
+        const tempSubtask: SubTask = { id: tempId, title: line, is_completed: false, order: subtasks.length };
+        setSubtasks((prev) => [...prev, tempSubtask]);
+        try {
+          const res = await apiFetch(`/subtasks`, {
+            method: "POST",
+            body: JSON.stringify({ todo_type: subtaskType, todo_id: subtaskTodoId, title: line }),
+          });
+          const created: SubTask = await res.json();
+          setSubtasks((prev) => prev.map((s) => (s.id === tempId ? created : s)));
+        } catch {
+          setSubtasks((prev) => prev.filter((s) => s.id !== tempId));
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleToggleSubtask(id: number) {
     const prev = subtasks.find((s) => s.id === id);
     if (!prev) return;
@@ -654,26 +683,36 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
                 </>
               )}
               {/* Add subtask input + button */}
-              <div className={`flex items-center gap-2 ${totalCount > 0 ? "" : "mt-3"}`}>
-                <input
-                  type="text"
+              <div className={`${totalCount > 0 ? "" : "mt-3"}`}>
+                <textarea
                   value={newSubtaskTitle}
                   onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                  onKeyDown={(e) => { e.stopPropagation(); if (e.nativeEvent.isComposing) return; if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); } }}
-                  placeholder="サブタスクを追加"
-                  className="flex-1 text-xs border-b border-gray-200 py-1.5 focus:outline-none focus:border-indigo-400 bg-transparent text-gray-700 placeholder-gray-300"
+                  onChange={(e) => { e.stopPropagation(); setNewSubtaskTitle(e.target.value); }}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.nativeEvent.isComposing) return;
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddSubtasks();
+                    }
+                  }}
+                  placeholder={"サブタスクを追加\n複数行可・改行で区切る\nCmd+Enterで追加"}
+                  rows={3}
+                  className="w-full text-base border-b border-gray-200 py-1.5 focus:outline-none focus:border-indigo-400 bg-transparent text-gray-700 placeholder-gray-300 resize-none leading-snug"
                 />
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleAddSubtask(); }}
-                  disabled={!newSubtaskTitle.trim() || isSubmitting}
-                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  aria-label="サブタスクを追加"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs text-gray-300">複数行入力可・改行で区切る・Cmd+Enterで追加</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleAddSubtasks(); }}
+                    disabled={!newSubtaskTitle.trim() || isSubmitting}
+                    className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    aria-label="サブタスクを追加"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </>
           ) : (
