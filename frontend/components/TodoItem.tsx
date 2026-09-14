@@ -303,15 +303,17 @@ export default function TodoItem({ item, onToggle, onDelete, onEdit, onConvertTo
     setIsSubmitting(true);
     try {
       await Promise.all(lines.map((line, i) => {
-        const tempId = -(Date.now() + i);
+        const tempId = -(Date.now() * 1000 + i);
         const tempSubtask: SubTask = { id: tempId, title: line, is_completed: false, order: subtasks.length + i };
         setSubtasks((prev) => [...prev, tempSubtask]);
         return apiFetch(`/subtasks`, {
           method: "POST",
           body: JSON.stringify({ todo_type: subtaskType, todo_id: subtaskTodoId, title: line }),
         })
-          .then(res => res.json() as Promise<SubTask>)
-          .then(created => { setSubtasks((prev) => prev.map((s) => (s.id === tempId ? created : s))); })
+          .then(async (res) => {
+            const created = await res.json() as SubTask;
+            setSubtasks((prev) => prev.map((s) => (s.id === tempId ? created : s)));
+          })
           .catch(() => { setSubtasks((prev) => prev.filter((s) => s.id !== tempId)); });
       }));
     } finally {
