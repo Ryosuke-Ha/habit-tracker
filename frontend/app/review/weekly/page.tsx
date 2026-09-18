@@ -174,17 +174,6 @@ export default function WeeklyReviewPage() {
     if (isGenerating) return;
     setIsGenerating(true);
     try {
-      // AI分析前にDBから最新のreviewデータを取得する
-      // （SWRが古いデータを持っている可能性があるため）
-      const latestRes = await apiFetch(
-        `/reviews/weekly/${currentWeekStart}`,
-        { headers: { "X-User-Email": email } }
-      );
-      if (latestRes.ok) {
-        const latestReview: WeeklyReview = await latestRes.json();
-        setReview(latestReview);
-      }
-
       const res = await apiFetch(
         `/reviews/weekly/${currentWeekStart}/analysis/generate`,
         { method: "POST", headers: { "X-User-Email": email } }
