@@ -79,7 +79,7 @@ export default function WeeklyReviewPage() {
   const [currentWeekStart, setCurrentWeekStart] = useState(getTodaySundayStr());
 
   const weekCacheKey = `weekly_review_${currentWeekStart}`;
-  const { data: swrData, isLoading, isValidating, revalidate } =
+  const { data: swrData, isLoading, isValidating, revalidate, error } =
     useStaleWhileRevalidate<WeeklyReviewData>({
       key: weekCacheKey,
       fetcher: async () => {
@@ -209,6 +209,7 @@ export default function WeeklyReviewPage() {
       const item: KPTItem = await res.json();
       setReview((prev) => prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === tempId ? item : i)) } : prev);
       invalidateSWRCache(weekCacheKey);
+      revalidate();
     } catch {
       setReview((prev) => prev ? { ...prev, kpt_items: prev.kpt_items.filter((i) => i.id !== tempId) } : prev);
     } finally {
@@ -259,6 +260,7 @@ export default function WeeklyReviewPage() {
         prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === updated.id ? updated : i)) } : prev
       );
       invalidateSWRCache(weekCacheKey);
+      revalidate();
     } catch {
       if (prevItem) setReview((prev) =>
         prev ? { ...prev, kpt_items: prev.kpt_items.map((i) => (i.id === itemId ? prevItem : i)) } : prev
@@ -284,6 +286,7 @@ export default function WeeklyReviewPage() {
         headers: { "X-User-Email": userEmail },
       });
       invalidateSWRCache(weekCacheKey);
+      revalidate();
     } catch {
       setReview((prev) => prev ? { ...prev, kpt_items: prevItems } : prev);
     } finally {
@@ -295,7 +298,7 @@ export default function WeeklyReviewPage() {
     return review?.kpt_items.filter((i) => i.type === type) ?? [];
   }
 
-  if (status === "loading" || isLoading) return <SkeletonReviewPage />;
+  if (status === "loading" || isLoading || (!review && !error)) return <SkeletonReviewPage />;
 
   return (
     <main>
