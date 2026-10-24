@@ -164,15 +164,26 @@ never appears in the system prompt or tool definitions.
 This is a layered approach, not a complete defence — prompt injection at the model level
 remains an open research problem.
 
-### 5. PR auto-creation, manual merge
+### 5. PR auto-creation, auto-merge on CI pass
 
 `auto-pr.yml` opens a PR automatically on every feature push.
-Merging to `main` requires a manual step.
+The Slack bot monitors CI and merges automatically once all checks pass (squash merge).
 
-*Why:* Fully automated merge to production removes the human checkpoint.
-For a solo developer, the PR is the review gate — AI Code Review runs on it,
-CI must pass, and the developer reads the diff before merging.
-Automation handles the mechanical work; judgement stays with the human.
+*Why:* The gate here is the checks, not a person — AI Code Review runs on every
+PR and CI must pass before merge. A manual merge step would add a confirmation
+click without adding information: I wrote the request that triggered the change,
+and revert is cheap.
+
+Automation handles the mechanical work; the judgement moved from the merge button
+to the conditions this trade-off depends on:
+
+- **Single developer.** There is no reviewer for a manual step to route to.
+- **CI defines the quality floor.** Passing checks is the bar being enforced.
+- **Revert is cheap.** Nothing that ships this way is irreversible in production.
+
+This stops holding as soon as any of those change — a second contributor, a gap in
+what CI covers, or a change that revert cannot undo (a migration, for example).
+At that point the merge step comes back.
 
 ### 6. Lazy log generation, not batch
 
