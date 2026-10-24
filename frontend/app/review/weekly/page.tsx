@@ -79,7 +79,7 @@ export default function WeeklyReviewPage() {
   const [currentWeekStart, setCurrentWeekStart] = useState(getTodaySundayStr());
 
   const weekCacheKey = `weekly_review_${currentWeekStart}`;
-  const { data: swrData, isLoading, isValidating, revalidate, error } =
+  const { data: swrData, isLoading, isValidating, revalidate } =
     useStaleWhileRevalidate<WeeklyReviewData>({
       key: weekCacheKey,
       fetcher: async () => {
@@ -298,7 +298,7 @@ export default function WeeklyReviewPage() {
     return review?.kpt_items.filter((i) => i.type === type) ?? [];
   }
 
-  if (status === "loading" || isLoading || (!review && !error)) return <SkeletonReviewPage />;
+  if (status === "loading" || isLoading || (review === null && isValidating)) return <SkeletonReviewPage />;
 
   return (
     <main>
