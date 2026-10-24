@@ -17,7 +17,7 @@
     "@tailwindcss/typography": "^0.5.19",
     "@types/recharts": "^1.8.29",
     "lucide-react": "^0.577.0",
-    "next": "14.2.3",
+    "next": "14.2",
     "next-auth": "^4.24.13",
     "react": "^18",
     "react-dom": "^18",
